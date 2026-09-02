@@ -279,6 +279,14 @@ async function inspectUrl(url, forceSingle = false) {
   });
 }
 
+function parseHumanSize(str) {
+  if (!str) return 0;
+  const m = String(str).trim().match(/^([\d.]+)\s*([KMGT]i?B)$/i);
+  if (!m) return 0;
+  const mult = { B: 1, KB: 1024, KIB: 1024, MB: 1024 ** 2, MIB: 1024 ** 2, GB: 1024 ** 3, GIB: 1024 ** 3, TB: 1024 ** 4, TIB: 1024 ** 4 }[m[2].toUpperCase()] || 1;
+  return Math.round(parseFloat(m[1]) * mult);
+}
+
 // ─── Download Engine ──────────────────────────────────────────────────────────
 function buildFormatStr(mode, quality, hasFfmpeg) {
   if (mode === 'audio') return 'bestaudio/best';
@@ -366,11 +374,20 @@ async function startDownload(item) {
     proc.stdout.on('data', data => {
       const text = data.toString();
       for (const line of text.split(/\r?\n/)) {
-        const m = line.match(/(\d+(?:\.\d+)?)%.*?at\s+([^\s]+).*?ETA\s+([^\s]+)/i);
-        if (m) {
-          item.progress = Number(m[1]);
-          item.speed = m[2];
-          item.eta = m[3];
+        const withSize = line.match(/(\d+(?:\.\d+)?)%\s+of\s+~?\s*([\d.]+\s*[KMGT]i?B).*?at\s+([^\s]+).*?ETA\s+([^\s]+)/i);
+        const plain = withSize || line.match(/(\d+(?:\.\d+)?)%.*?at\s+([^\s]+).*?ETA\s+([^\s]+)/i);
+        if (withSize) {
+          item.progress = Number(withSize[1]);
+          item.totalBytes = parseHumanSize(withSize[2]);
+          item.downloadedBytes = Math.round(item.totalBytes * (item.progress / 100));
+          item.speed = withSize[3];
+          item.eta = withSize[4];
+          emit('queue:updated', downloadQueue);
+          updateTrayMenu();
+        } else if (plain) {
+          item.progress = Number(plain[1]);
+          item.speed = plain[2];
+          item.eta = plain[3];
           emit('queue:updated', downloadQueue);
           updateTrayMenu();
         }
@@ -412,6 +429,7 @@ async function startDownload(item) {
       if (code === 0) {
         item.status = 'completed';
         item.progress = 100;
+        try { if (item.file && fs.existsSync(item.file)) item.fileSize = fs.statSync(item.file).size; } catch {}
         log('info', `Download completed [${item.id}]: ${item.title}`);
         emit('queue:updated', downloadQueue);
         addToHistory(item);
@@ -504,6 +522,7 @@ function addToHistory(item) {
     duration: item.duration || 0,
     mode: item.mode,
     error: item.error || '',
+    fileSize: item.fileSize || item.totalBytes || 0,
   };
   history.unshift(entry);
   saveHistory(history);

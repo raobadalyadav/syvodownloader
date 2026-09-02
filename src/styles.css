@@ -184,15 +184,6 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent) !importa
 .info-badges { display: flex; gap: 6px; flex-wrap: wrap; }
 .badge { padding: 2px 8px; background: var(--surface3); border-radius: 10px; font-size: 11px; color: var(--text2); }
 
-/* Format Table */
-.format-table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.format-table-inner { overflow-x: auto; }
-.format-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.format-table th { padding: 8px 10px; text-align: left; background: var(--surface2); color: var(--text3); font-weight: 600; border-bottom: 1px solid var(--border); }
-.format-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); color: var(--text2); }
-.format-table tr:hover td { background: var(--surface2); }
-.format-table tr:last-child td { border-bottom: none; }
-
 /* Playlist */
 .playlist-info { padding: 10px 12px; background: var(--surface2); border-radius: var(--radius); font-size: 13px; color: var(--text2); }
 .playlist-controls { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }

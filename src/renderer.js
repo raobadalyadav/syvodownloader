@@ -178,18 +178,47 @@ async function importUrlsFromFile() {
 }
 
 /* ─── Video Info Modal ──────────────────────────────── */
+/** Rough combined (video+audio) size at a given height, from whatever the extractor reported. */
+function estimateVideoSize(formats, height) {
+  const atHeight = formats.filter(f => f.height === height);
+  if (!atHeight.length) return 0;
+  const combined = atHeight.find(f => f.vcodec && f.vcodec !== 'none' && f.acodec && f.acodec !== 'none' && f.filesize);
+  if (combined) return combined.filesize;
+  const video = atHeight.filter(f => f.vcodec && f.vcodec !== 'none').sort((a, b) => (b.filesize || 0) - (a.filesize || 0))[0];
+  const bestAudio = formats.filter(f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none') && f.filesize).sort((a, b) => (b.filesize || 0) - (a.filesize || 0))[0];
+  return (video?.filesize || 0) + (bestAudio?.filesize || 0);
+}
+/** Rough audio-only size for a bitrate choice, using known audio formats or a duration × bitrate estimate. */
+function estimateAudioSize(formats, kbps, duration) {
+  const known = formats.filter(f => f.acodec && f.acodec !== 'none' && (!f.vcodec || f.vcodec === 'none') && f.filesize).sort((a, b) => (b.filesize || 0) - (a.filesize || 0));
+  if (kbps === 'best' || !kbps) return known[0]?.filesize || (duration ? Math.round(160 * 1000 / 8 * duration) : 0);
+  return duration ? Math.round(+kbps * 1000 / 8 * duration) : 0;
+}
+
 function applyInfoModeOptions(meta) {
   const mode = $('#infoMode').value;
   fillSelect($('#infoFormat'), mode === 'audio' ? AUDIO_FORMATS : VIDEO_FORMATS, mode === 'audio' ? (S.settings.preferredAudioFormat || 'mp3') : (S.settings.preferredContainer || 'mp4'));
   const qs = $('#infoQuality');
+  const formats = meta.formats || [];
   if (mode === 'audio') {
-    fillSelect(qs, AUDIO_QUALITIES, 'best');
+    qs.innerHTML = AUDIO_QUALITIES.map(([v, l]) => {
+      const size = estimateAudioSize(formats, v, meta.duration);
+      return `<option value="${v}">${l}${size ? ' — ~' + fmtSize(size) : ''}</option>`;
+    }).join('');
+    qs.value = 'best';
     return;
   }
   qs.innerHTML = '';
-  const heights = [...new Set((meta.formats || []).filter(f => f.height).map(f => f.height))].sort((a, b) => b - a);
+  const heights = [...new Set(formats.filter(f => f.height).map(f => f.height))].sort((a, b) => b - a);
   if (heights.length) {
-    heights.forEach(h => { const o = document.createElement('option'); o.value = h; o.textContent = `${h}p`; if (h <= 1080) o.selected = true; qs.appendChild(o); });
+    heights.forEach(h => {
+      const o = document.createElement('option');
+      o.value = h;
+      const size = estimateVideoSize(formats, h);
+      o.textContent = `${h}p${size ? ' — ~' + fmtSize(size) : ''}`;
+      if (h <= 1080) o.selected = true;
+      qs.appendChild(o);
+    });
   } else {
     VIDEO_QUALITIES.forEach(([v, l], i) => { const o = document.createElement('option'); o.value = v; o.textContent = l; if (i === 2) o.selected = true; qs.appendChild(o); });
   }
@@ -208,24 +237,10 @@ function showInfoModal(meta, url) {
 
   $('#infoMode').value = $('#dlMode').value || 'video';
   applyInfoModeOptions(meta);
-
-  // Format table
-  const wrap = $('#formatTableInner');
-  if (meta.formats?.length) {
-    wrap.innerHTML = `<table class="format-table"><thead><tr><th>ID</th><th>Ext</th><th>Resolution</th><th>FPS</th><th>VCodec</th><th>ACodec</th><th>Size</th></tr></thead><tbody>${
-      meta.formats.slice(-30).reverse().map(f => `<tr><td>${esc(f.format_id)}</td><td>${esc(f.ext)}</td><td>${esc(f.resolution||'audio')}</td><td>${f.fps||'—'}</td><td>${esc((f.vcodec||'—').split('.')[0])}</td><td>${esc((f.acodec||'—').split('.')[0])}</td><td>${fmtSize(f.filesize)}</td></tr>`).join('')
-    }</tbody></table>`;
-  }
   openModal('#infoModalOverlay');
 }
 
 $('#infoMode').onchange = () => { if (S.pendingMeta) applyInfoModeOptions(S.pendingMeta.meta); };
-
-$('#toggleFormats').onclick = () => {
-  const inner = $('#formatTableInner');
-  const hidden = inner.classList.toggle('hidden');
-  $('#toggleFormats').textContent = hidden ? '▼ Show available formats' : '▲ Hide formats';
-};
 
 /* ─── Duplicate detection ────────────────────────────── */
 let dupResolver = null;
@@ -461,12 +476,13 @@ function queueItemHTML(item) {
         ${item.duration ? `<span>${fmtDur(item.duration)}</span>` : ''}
         ${item.mode === 'audio' ? `<span class="meta-badge">🎵 ${item.quality && item.quality !== 'best' ? item.quality + ' kbps' : 'Best'}</span>` : `<span class="meta-badge">🎬 ${item.quality || 'Best'}p</span>`}
         <span class="meta-badge">${((item.mode === 'audio' ? item.audioFormat : item.container) || (item.mode === 'audio' ? 'mp3' : 'mp4')).toUpperCase()}</span>
+        ${isDone && (item.fileSize || item.totalBytes) ? `<span class="meta-badge">📦 ${fmtSize(item.fileSize || item.totalBytes)}</span>` : ''}
       </div>
       <div class="item-progress-wrap">
         <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
         <span class="progress-pct">${pct}%</span>
       </div>
-      ${isActive ? `<div class="item-sub">${esc(item.speed || '')} ${item.eta ? '· ETA ' + esc(item.eta) : ''} ${item.statusLabel ? '· ' + esc(item.statusLabel) : ''}</div>` : ''}
+      ${isActive ? `<div class="item-sub">${item.totalBytes ? fmtSize(item.downloadedBytes || 0) + ' / ' + fmtSize(item.totalBytes) + ' · ' : ''}${esc(item.speed || '')} ${item.eta ? '· ETA ' + esc(item.eta) : ''} ${item.statusLabel ? '· ' + esc(item.statusLabel) : ''}</div>` : ''}
       ${isFailed ? `<div class="item-error" title="${esc(item.error)}">${esc(item.error)}</div>` : ''}
     </div>
     <div class="item-actions">
@@ -514,7 +530,7 @@ function renderHistory() {
       <img class="hist-thumb" src="${esc(h.thumbnail || '')}" onerror="this.style.opacity=.2"/>
       <div style="min-width:0">
         <div class="hist-title">${esc(h.title)}</div>
-        <div class="hist-meta">${esc(h.uploader || '')} · ${fmtDate(h.downloadDate)} · ${esc(h.quality || '')} ${esc(h.format || '')} · <span style="color:${h.status==='completed'?'var(--green)':'var(--red)'}">${h.status}</span></div>
+        <div class="hist-meta">${esc(h.uploader || '')} · ${fmtDate(h.downloadDate)} · ${esc(h.quality || '')} ${esc(h.format || '')}${h.fileSize ? ' · ' + fmtSize(h.fileSize) : ''} · <span style="color:${h.status==='completed'?'var(--green)':'var(--red)'}">${h.status}</span></div>
       </div>
       <div class="hist-actions">
         ${h.filePath ? `<button class="act-btn" data-hact="open-folder" title="Open folder">📁</button>` : ''}
