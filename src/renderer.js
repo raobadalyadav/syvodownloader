@@ -61,7 +61,7 @@ document.querySelectorAll('[data-action]').forEach(btn => {
     e.stopPropagation();
     const a = btn.dataset.action;
     if (a === 'paste-url') showUrlModal();
-    else if (a === 'add-playlist') showUrlModal(true);
+    else if (a === 'add-playlist') showUrlModal();
     else if (a === 'import-file') importUrlsFromFile();
     else if (a === 'open-downloads') window.api.openDownloads();
     else if (a === 'export-history') window.api.exportHistory();
@@ -118,9 +118,8 @@ $('#pauseAllFooter').onclick = () => window.api.pauseAll();
 $('#resumeAllFooter').onclick = () => window.api.resumeAll();
 
 /* ─── URL Modal ─────────────────────────────────────── */
-function showUrlModal(playlist = false) {
+function showUrlModal() {
   openModal('#urlModalOverlay');
-  if (playlist) $('#dlPlaylist').checked = true;
   setTimeout(() => $('#urlInput').focus(), 100);
 }
 $('#clipboardBtn').onclick = async () => {
@@ -134,8 +133,8 @@ $('#analyzeBtn').onclick = async () => {
   S.analyzeAbort = false;
   openModal('#analyzingOverlay');
   try {
-    const isPlaylist = $('#dlPlaylist').checked;
-    const meta = await window.api.inspect(url, isPlaylist);
+    const forceSingle = $('#dlSingleOnly').checked;
+    const meta = await window.api.inspect(url, forceSingle);
     if (S.analyzeAbort) return;
     closeModal('#analyzingOverlay');
     if (meta.isPlaylist) {

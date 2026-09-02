@@ -196,12 +196,15 @@ function updateTrayMenu() {
 }
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
-async function inspectUrl(url, isPlaylist = false) {
+async function inspectUrl(url, forceSingle = false) {
   return new Promise((resolve, reject) => {
     if (!/^https?:\/\//i.test(url.trim())) return reject(new Error('Please enter a valid URL starting with http:// or https://'));
     const yt = locateBinary('yt-dlp');
     const args = ['--dump-single-json', '--no-warnings', '--skip-download'];
-    if (!isPlaylist) args.push('--no-playlist');
+    // Only force single-video mode when explicitly asked; otherwise let yt-dlp
+    // auto-detect, which correctly resolves playlist/mix URLs (its own default
+    // favors the playlist when a URL refers to both a video and a playlist).
+    if (forceSingle) args.push('--no-playlist');
     args.push(url.trim());
     const proc = spawn(yt, args, { windowsHide: true });
     let out = '', err = '';
@@ -555,7 +558,7 @@ app.whenReady().then(() => {
     return settings;
   });
 
-  ipcMain.handle('media:inspect', (_e, url, isPlaylist) => inspectUrl(url, isPlaylist));
+  ipcMain.handle('media:inspect', (_e, url, forceSingle) => inspectUrl(url, forceSingle));
 
   ipcMain.handle('queue:get', () => downloadQueue);
   ipcMain.handle('queue:add', (_e, item) => {
