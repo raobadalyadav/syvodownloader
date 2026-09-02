@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src https:;">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Desktop Video Downloader</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="titlebar">
+    <div class="brand"><span class="brand-icon">▶</span> Desktop Video Downloader</div>
+    <div class="window-actions"><button>—</button><button>□</button><button>×</button></div>
+  </header>
+  <nav class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Tools</span><span>Help</span></nav>
+
+  <section class="toolbar">
+    <button id="pasteBtn" class="primary">🔗 Paste Link</button>
+    <div class="switch" id="autoToggle" title="Start downloads automatically"><div class="knob"></div></div>
+    <div class="select">Download <b id="modeLabel">Video</b>⌄</div>
+    <div class="select">Quality <b id="qualityLabel">HD 1080p</b>⌄</div>
+    <div class="select">For <b>Windows</b>⌄</div>
+    <div class="select grow">Save to <b id="pathLabel">Downloads</b>⌄</div>
+    <button class="icon-btn" id="settingsBtn">⚙</button>
+  </section>
+
+  <main>
+    <div class="tabs" id="tabs">
+      <button class="active" data-tab="all">All</button>
+      <button data-tab="video">Video</button>
+      <button data-tab="audio">Audio</button>
+      <button data-tab="playlists">Playlists</button>
+      <button data-tab="channels">Channels</button>
+      <button data-tab="subscriptions">Subscriptions ✦</button>
+      <button data-tab="processed">Processed ✦</button>
+      <div class="tab-actions"><span id="itemCount">0 items</span><span>⌕</span><span>↕</span></div>
+    </div>
+
+    <div class="list" id="downloadList"></div>
+
+    <section class="empty" id="emptyState">
+      <div class="empty-icon">↓</div>
+      <h2>Paste a video link to begin</h2>
+      <p>Use this app only for content you own or are authorized to download.</p>
+    </section>
+  </main>
+
+  <div class="statusbar">
+    <div><strong id="progressText">0 downloads in progress</strong><div id="speedText">Ready</div></div>
+    <button class="pause">Ⅱ Pause All</button>
+  </div>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" class="dialog-body">
+      <div class="dialog-head"><h2>Settings</h2><button value="cancel">×</button></div>
+      <label>Download folder</label>
+      <div class="folder-row"><input id="folderInput" readonly /><button type="button" id="browseBtn">Browse…</button></div>
+      <label>Maximum concurrent downloads</label>
+      <select id="concurrency"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
+      <label>Default container</label>
+      <select id="container"><option value="mp4" selected>MP4</option><option value="mkv">MKV</option><option value="webm">WebM</option></select>
+      <label class="check"><input id="subs" type="checkbox" /> Download subtitles when available</label>
+      <button class="primary save" id="saveSettings">Save</button>
+    </form>
+  </dialog>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

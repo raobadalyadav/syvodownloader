@@ -1,0 +1,23 @@
+{
+  "name": "desktop-video-downloader",
+  "version": "1.0.0",
+  "description": "Windows-style desktop media downloader UI using yt-dlp for content you are authorized to download.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build:win": "electron-builder --win nsis",
+    "build:portable": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.svotech.desktopdownloader",
+    "productName": "Desktop Video Downloader",
+    "files": ["src/**/*", "package.json"],
+    "directories": { "output": "dist" },
+    "win": { "target": ["nsis", "portable"] }
+  }
+}
