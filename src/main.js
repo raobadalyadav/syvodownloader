@@ -73,9 +73,13 @@ let history = loadHistory();
 // ─── Binary Locator ───────────────────────────────────────────────────────────
 function locateBinary(name) {
   const exe = process.platform === 'win32' ? `${name}.exe` : name;
+  const home = process.env.HOME || process.env.USERPROFILE || '';
   const candidates = [
     path.join(process.resourcesPath || '', 'bin', exe),
     path.join(__dirname, '..', 'bin', exe),
+    path.join(home, '.local', 'bin', exe),
+    path.join('/usr', 'local', 'bin', exe),
+    path.join('/usr', 'bin', exe),
     exe,
   ];
   return candidates.find(p => p === exe || fs.existsSync(p)) || exe;
@@ -258,37 +262,47 @@ async function inspectUrl(url, isPlaylist = false) {
 }
 
 // ─── Download Engine ──────────────────────────────────────────────────────────
-function buildFormatStr(mode, quality, container) {
+function buildFormatStr(mode, quality, hasFfmpeg) {
   if (mode === 'audio') return 'bestaudio/best';
   const h = parseInt(quality) || 1080;
-  return `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${h}]+bestaudio/best[height<=${h}]/best`;
+  if (hasFfmpeg) {
+    return `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${h}]+bestaudio/best[height<=${h}]/best`;
+  }
+  // No ffmpeg — download best pre-merged mp4 only
+  return `best[height<=${h}][ext=mp4]/best[height<=${h}]/best`;
 }
 
 function buildArgs(item) {
   const yt = locateBinary('yt-dlp');
-  const ffmpeg = locateBinary('ffmpeg');
+  const ffmpegPath = locateBinary('ffmpeg');
+  const hasFfmpeg = fs.existsSync(ffmpegPath);
   const output = path.join(settings.outputDir, settings.filenameTemplate || '%(title).180B [%(id)s].%(ext)s');
   const args = [
     '--newline', '--no-warnings', '--progress',
-    '--ffmpeg-location', ffmpeg,
     '-o', output,
     '--restrict-filenames',
   ];
+  if (hasFfmpeg) args.splice(3, 0, '--ffmpeg-location', ffmpegPath);
+
   if (item.mode === 'audio') {
     args.push('-f', 'bestaudio/best');
-    args.push('-x', '--audio-format', item.audioFormat || settings.preferredAudioFormat || 'mp3', '--audio-quality', '0');
-    if (settings.embedMetadata) args.push('--add-metadata');
-    if (settings.embedThumbnail) args.push('--embed-thumbnail');
+    if (hasFfmpeg) {
+      args.push('-x', '--audio-format', item.audioFormat || settings.preferredAudioFormat || 'mp3', '--audio-quality', '0');
+      if (settings.embedMetadata) args.push('--add-metadata');
+      if (settings.embedThumbnail) args.push('--embed-thumbnail');
+    }
   } else {
-    args.push('-f', buildFormatStr(item.mode, item.quality, item.container));
-    args.push('--merge-output-format', item.container || settings.preferredContainer || 'mp4');
-    if (settings.embedMetadata) args.push('--add-metadata');
+    args.push('-f', buildFormatStr(item.mode, item.quality, hasFfmpeg));
+    if (hasFfmpeg) {
+      args.push('--merge-output-format', item.container || settings.preferredContainer || 'mp4');
+      if (settings.embedMetadata) args.push('--add-metadata');
+    }
   }
   if (item.subtitles) {
     args.push('--write-subs');
     if (item.autoSubtitles) args.push('--write-auto-subs');
     args.push('--sub-langs', item.subLang || 'en', '--convert-subs', 'srt');
-    if (item.embedSubs) args.push('--embed-subs');
+    if (item.embedSubs && hasFfmpeg) args.push('--embed-subs');
   }
   if (item.playlist) args.push('--yes-playlist'); else args.push('--no-playlist');
   if (settings.rateLimitMbps > 0) args.push('-r', `${settings.rateLimitMbps}M`);
@@ -598,6 +612,42 @@ app.whenReady().then(() => {
   ipcMain.handle('clipboard:read', async () => {
     const { clipboard } = require('electron');
     return clipboard.readText();
+  });
+
+  ipcMain.handle('clipboard:write', (_e, text) => {
+    const { clipboard } = require('electron');
+    clipboard.writeText(text);
+    return true;
+  });
+
+  ipcMain.handle('file:import-urls', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Import URLs from text file',
+      properties: ['openFile'],
+      filters: [{ name: 'Text Files', extensions: ['txt', 'csv'] }, { name: 'All Files', extensions: ['*'] }]
+    });
+    if (result.canceled || !result.filePaths[0]) return [];
+    const content = fs.readFileSync(result.filePaths[0], 'utf8');
+    const urls = content.split(/\r?\n/).map(l => l.trim()).filter(l => /^https?:\/\//i.test(l));
+    return urls;
+  });
+
+  ipcMain.handle('disk:check', async (_e, neededBytes) => {
+    try {
+      const stat = fs.statfsSync(settings.outputDir);
+      const free = stat.bfree * stat.bsize;
+      return { free, enough: free > neededBytes };
+    } catch { return { free: -1, enough: true }; }
+  });
+
+  ipcMain.handle('queue:move', (_e, id, direction) => {
+    const idx = downloadQueue.findIndex(i => i.id === id);
+    if (idx < 0) return;
+    const to = direction === 'up' ? idx - 1 : idx + 1;
+    if (to < 0 || to >= downloadQueue.length) return;
+    [downloadQueue[idx], downloadQueue[to]] = [downloadQueue[to], downloadQueue[idx]];
+    emit('queue:updated', downloadQueue);
+    persistQueue();
   });
 
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

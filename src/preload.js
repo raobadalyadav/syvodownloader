@@ -49,7 +49,17 @@ contextBridge.exposeInMainWorld('api', {
   closeWindow:   ()       => ipcRenderer.invoke('window:close'),
 
   // Clipboard
-  readClipboard: ()       => ipcRenderer.invoke('clipboard:read'),
+  readClipboard:  ()        => ipcRenderer.invoke('clipboard:read'),
+  writeClipboard: text      => ipcRenderer.invoke('clipboard:write', text),
+
+  // File
+  importUrls:     ()        => ipcRenderer.invoke('file:import-urls'),
+
+  // Disk
+  checkDisk:      bytes     => ipcRenderer.invoke('disk:check', bytes),
+
+  // Queue move
+  moveItem:       (id, dir) => ipcRenderer.invoke('queue:move', id, dir),
 
   // Events
   on: (channel, cb) => {

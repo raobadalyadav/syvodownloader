@@ -1,69 +1,427 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; img-src 'self' https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src https:;">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Desktop Video Downloader</title>
-  <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8"/>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self';">
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Syvo Downloader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <!-- Toast container -->
+  <div id="toastContainer"></div>
 </head>
 <body>
-  <header class="titlebar">
-    <div class="brand"><span class="brand-icon">▶</span> Desktop Video Downloader</div>
-    <div class="window-actions"><button>—</button><button>□</button><button>×</button></div>
-  </header>
-  <nav class="menubar"><span>File</span><span>Edit</span><span>View</span><span>Tools</span><span>Help</span></nav>
 
-  <section class="toolbar">
-    <button id="pasteBtn" class="primary">🔗 Paste Link</button>
-    <div class="switch" id="autoToggle" title="Start downloads automatically"><div class="knob"></div></div>
-    <div class="select">Download <b id="modeLabel">Video</b>⌄</div>
-    <div class="select">Quality <b id="qualityLabel">HD 1080p</b>⌄</div>
-    <div class="select">For <b>Windows</b>⌄</div>
-    <div class="select grow">Save to <b id="pathLabel">Downloads</b>⌄</div>
-    <button class="icon-btn" id="settingsBtn">⚙</button>
-  </section>
-
-  <main>
-    <div class="tabs" id="tabs">
-      <button class="active" data-tab="all">All</button>
-      <button data-tab="video">Video</button>
-      <button data-tab="audio">Audio</button>
-      <button data-tab="playlists">Playlists</button>
-      <button data-tab="channels">Channels</button>
-      <button data-tab="subscriptions">Subscriptions ✦</button>
-      <button data-tab="processed">Processed ✦</button>
-      <div class="tab-actions"><span id="itemCount">0 items</span><span>⌕</span><span>↕</span></div>
-    </div>
-
-    <div class="list" id="downloadList"></div>
-
-    <section class="empty" id="emptyState">
-      <div class="empty-icon">↓</div>
-      <h2>Paste a video link to begin</h2>
-      <p>Use this app only for content you own or are authorized to download.</p>
-    </section>
-  </main>
-
-  <div class="statusbar">
-    <div><strong id="progressText">0 downloads in progress</strong><div id="speedText">Ready</div></div>
-    <button class="pause">Ⅱ Pause All</button>
+<!-- TITLEBAR -->
+<header class="titlebar" id="titlebar">
+  <div class="titlebar-left">
+    <div class="app-logo"><span class="logo-icon">⬇</span><span class="app-name">Syvo Downloader</span></div>
   </div>
+  <div class="titlebar-drag"></div>
+  <div class="titlebar-right">
+    <button class="win-btn" id="btnMin" title="Minimize">─</button>
+    <button class="win-btn" id="btnMax" title="Maximize">□</button>
+    <button class="win-btn danger" id="btnClose" title="Close">✕</button>
+  </div>
+</header>
 
-  <dialog id="settingsDialog">
-    <form method="dialog" class="dialog-body">
-      <div class="dialog-head"><h2>Settings</h2><button value="cancel">×</button></div>
-      <label>Download folder</label>
-      <div class="folder-row"><input id="folderInput" readonly /><button type="button" id="browseBtn">Browse…</button></div>
-      <label>Maximum concurrent downloads</label>
-      <select id="concurrency"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
-      <label>Default container</label>
-      <select id="container"><option value="mp4" selected>MP4</option><option value="mkv">MKV</option><option value="webm">WebM</option></select>
-      <label class="check"><input id="subs" type="checkbox" /> Download subtitles when available</label>
-      <button class="primary save" id="saveSettings">Save</button>
-    </form>
-  </dialog>
+<!-- MENUBAR -->
+<nav class="menubar" id="menubar">
+  <div class="menu-item" data-menu="file">File
+    <div class="dropdown">
+      <button data-action="paste-url">Add URL <span class="kbd">Ctrl+V</span></button>
+      <button data-action="add-playlist">Add Playlist</button>
+      <button data-action="import-file">Add URLs from File…</button>
+      <div class="sep"></div>
+      <button data-action="open-downloads">Open Download Folder</button>
+      <button data-action="export-history">Export History</button>
+      <div class="sep"></div>
+      <button data-action="quit">Exit</button>
+    </div>
+  </div>
+  <div class="menu-item" data-menu="edit">Edit
+    <div class="dropdown">
+      <button data-action="clear-completed">Clear Completed</button>
+      <button data-action="retry-failed">Retry Failed</button>
+      <button data-action="cancel-all">Cancel All</button>
+    </div>
+  </div>
+  <div class="menu-item" data-menu="view">View
+    <div class="dropdown">
+      <button data-action="tab-all">All Downloads</button>
+      <button data-action="tab-video">Video</button>
+      <button data-action="tab-audio">Audio</button>
+      <button data-action="tab-completed">Completed</button>
+      <button data-action="tab-history">History</button>
+    </div>
+  </div>
+  <div class="menu-item" data-menu="tools">Tools
+    <div class="dropdown">
+      <button data-action="open-settings">Settings <span class="kbd">Ctrl+,</span></button>
+      <button data-action="check-deps">Diagnostics</button>
+      <button data-action="open-logs">Open Logs</button>
+    </div>
+  </div>
+  <div class="menu-item" data-menu="help">Help
+    <div class="dropdown">
+      <button data-action="about">About</button>
+    </div>
+  </div>
+</nav>
 
-  <script src="renderer.js"></script>
+<!-- TOOLBAR -->
+<section class="toolbar">
+  <button class="btn-primary" id="pasteBtn" title="Paste URL (Ctrl+V)">
+    <span class="btn-icon">+</span> Add URL
+  </button>
+  <div class="toolbar-sep"></div>
+  <div class="tb-group">
+    <label class="tb-label">Mode</label>
+    <select id="modeSelect" class="tb-select">
+      <option value="video">🎬 Video</option>
+      <option value="audio">🎵 Audio</option>
+    </select>
+  </div>
+  <div class="tb-group">
+    <label class="tb-label">Quality</label>
+    <select id="qualitySelect" class="tb-select">
+      <option value="2160">4K 2160p</option>
+      <option value="1440">1440p</option>
+      <option value="1080" selected>HD 1080p</option>
+      <option value="720">HD 720p</option>
+      <option value="480">480p</option>
+      <option value="360">360p</option>
+      <option value="240">240p</option>
+    </select>
+  </div>
+  <div class="tb-group">
+    <label class="tb-label">Format</label>
+    <select id="formatSelect" class="tb-select">
+      <option value="mp4" selected>MP4</option>
+      <option value="mkv">MKV</option>
+      <option value="webm">WebM</option>
+    </select>
+  </div>
+  <div class="tb-group grow">
+    <label class="tb-label">Save To</label>
+    <div class="path-pill" id="pathPill" title="Click to change folder">📁 <span id="pathLabel">Downloads</span></div>
+  </div>
+  <button class="icon-btn" id="importFileBtn" title="Import URLs from .txt file">📂</button>
+  <button class="icon-btn" id="settingsBtn" title="Settings">⚙</button>
+</section>
+
+<!-- TABS + SEARCH -->
+<div class="tabs-bar">
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="all">All</button>
+    <button class="tab" data-tab="video">Video</button>
+    <button class="tab" data-tab="audio">Audio</button>
+    <button class="tab" data-tab="completed">Completed</button>
+    <button class="tab" data-tab="failed">Failed</button>
+    <button class="tab" data-tab="history">History</button>
+  </div>
+  <div class="tab-actions">
+    <span id="itemCount" class="count-badge">0 items</span>
+    <input type="search" id="searchInput" class="search-box" placeholder="🔍 Search…"/>
+    <select id="sortSelect" class="tb-select" style="height:28px;font-size:12px;">
+      <option value="added-desc">Newest first</option>
+      <option value="added-asc">Oldest first</option>
+      <option value="title">Title A–Z</option>
+      <option value="status">By Status</option>
+    </select>
+    <button class="icon-btn" id="pauseAllBtn" title="Pause All">⏸</button>
+    <button class="icon-btn" id="resumeAllBtn" title="Resume All">▶</button>
+    <button class="icon-btn" id="clearCompletedBtn" title="Clear Completed">🗑</button>
+  </div>
+</div>
+
+<!-- DEP WARNING BANNER -->
+<div class="dep-banner hidden" id="depBanner">
+  <span id="depBannerText">⚠ yt-dlp not found — downloads will fail.</span>
+  <a href="#" id="depBannerDiag">Open Diagnostics</a>
+  <button class="dep-banner-close" id="depBannerClose">✕</button>
+</div>
+
+<!-- MAIN LIST -->
+<main class="main-area" id="mainArea">
+  <div class="queue-list" id="queueList"></div>
+  <div class="history-list hidden" id="historyList"></div>
+
+  <!-- QUEUE RESTORE BANNER -->
+  <div class="restore-bar hidden" id="restoreBar">
+    <span id="restoreText"></span>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost sm" id="restoreResumeAll">Resume All</button>
+      <button class="btn-ghost sm" id="restoreDiscard">Discard</button>
+    </div>
+  </div>
+  <!-- EMPTY STATE -->
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">⬇</div>
+    <h2>No downloads yet</h2>
+    <p>Paste a URL to get started. Only use this app for content you own or are authorized to download.</p>
+    <button class="btn-primary large" id="emptyAddBtn">+ Add URL</button>
+  </div>
+</main>
+
+<!-- STATUS BAR -->
+<footer class="statusbar">
+  <div class="status-left">
+    <span class="status-dot" id="statusDot"></span>
+    <strong id="progressText">Ready</strong>
+    <span id="speedText"></span>
+  </div>
+  <div class="status-right">
+    <span id="queueStats"></span>
+    <button class="btn-ghost" id="pauseAllFooter">⏸ Pause All</button>
+    <button class="btn-ghost" id="resumeAllFooter">▶ Resume All</button>
+  </div>
+</footer>
+
+<!-- ── MODALS ─────────────────────────────────────────────────── -->
+
+<!-- URL Dialog -->
+<div class="modal-overlay hidden" id="urlModalOverlay">
+  <div class="modal" id="urlModal">
+    <div class="modal-head">
+      <h2>Add Download</h2>
+      <button class="modal-close" data-close="urlModalOverlay">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="field-label">URL</label>
+      <textarea id="urlInput" class="url-textarea" placeholder="Paste video or playlist URL here…" rows="3" spellcheck="false"></textarea>
+      <div class="url-actions">
+        <button class="btn-ghost sm" id="clipboardBtn">📋 Paste from Clipboard</button>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label class="field-label">Mode</label>
+          <select id="dlMode" class="field-select">
+            <option value="video">🎬 Video</option>
+            <option value="audio">🎵 Audio Only</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Quality</label>
+          <select id="dlQuality" class="field-select">
+            <option value="2160">4K 2160p</option>
+            <option value="1440">1440p</option>
+            <option value="1080" selected>HD 1080p</option>
+            <option value="720">720p</option>
+            <option value="480">480p</option>
+            <option value="360">360p</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Format</label>
+          <select id="dlFormat" class="field-select">
+            <option value="mp4" selected>MP4</option>
+            <option value="mkv">MKV</option>
+            <option value="webm">WebM</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="checkbox-label"><input type="checkbox" id="dlSubtitles"/> Download subtitles</label>
+        <label class="checkbox-label"><input type="checkbox" id="dlPlaylist"/> Include playlist</label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" data-close="urlModalOverlay">Cancel</button>
+      <button class="btn-primary" id="analyzeBtn">🔍 Analyze</button>
+    </div>
+  </div>
+</div>
+
+<!-- Video Info Dialog -->
+<div class="modal-overlay hidden" id="infoModalOverlay">
+  <div class="modal wide" id="infoModal">
+    <div class="modal-head">
+      <h2>Video Information</h2>
+      <button class="modal-close" data-close="infoModalOverlay">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="video-info-card">
+        <img id="infoThumb" class="info-thumb" src="" alt="thumbnail"/>
+        <div class="info-details">
+          <div class="info-title" id="infoTitle"></div>
+          <div class="info-meta" id="infoMeta"></div>
+          <div class="info-badges" id="infoBadges"></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field-group">
+          <label class="field-label">Mode</label>
+          <select id="infoMode" class="field-select">
+            <option value="video">🎬 Video</option>
+            <option value="audio">🎵 Audio Only</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Quality</label>
+          <select id="infoQuality" class="field-select"></select>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Format</label>
+          <select id="infoFormat" class="field-select">
+            <option value="mp4">MP4</option>
+            <option value="mkv">MKV</option>
+            <option value="webm">WebM</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row">
+        <label class="checkbox-label"><input type="checkbox" id="infoSubs"/> Download subtitles</label>
+        <label class="checkbox-label"><input type="checkbox" id="infoEmbed"/> Embed metadata</label>
+      </div>
+      <div class="format-table-wrap" id="formatTableWrap">
+        <button class="btn-ghost sm" id="toggleFormats">▼ Show available formats</button>
+        <div class="format-table-inner hidden" id="formatTableInner"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" data-close="infoModalOverlay">Cancel</button>
+      <button class="btn-primary" id="addToQueueBtn">➕ Add to Queue</button>
+    </div>
+  </div>
+</div>
+
+<!-- Playlist Dialog -->
+<div class="modal-overlay hidden" id="playlistModalOverlay">
+  <div class="modal wide" id="playlistModal">
+    <div class="modal-head">
+      <h2 id="playlistTitle">Playlist</h2>
+      <button class="modal-close" data-close="playlistModalOverlay">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="playlist-info" id="playlistInfo"></div>
+      <div class="playlist-controls">
+        <label class="checkbox-label"><input type="checkbox" id="selectAll" checked/> Select All</label>
+        <div class="field-group"><label class="field-label">Mode</label><select id="plMode" class="field-select"><option value="video">🎬 Video</option><option value="audio">🎵 Audio</option></select></div>
+        <div class="field-group"><label class="field-label">Quality</label><select id="plQuality" class="field-select"><option value="1080" selected>1080p</option><option value="720">720p</option><option value="480">480p</option></select></div>
+        <div class="field-group"><label class="field-label">Format</label><select id="plFormat" class="field-select"><option value="mp4">MP4</option><option value="mkv">MKV</option></select></div>
+      </div>
+      <div class="playlist-items" id="playlistItems"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" data-close="playlistModalOverlay">Cancel</button>
+      <button class="btn-primary" id="downloadPlaylistBtn">⬇ Download Selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Dialog -->
+<div class="modal-overlay hidden" id="settingsModalOverlay">
+  <div class="modal wide" id="settingsModal">
+    <div class="modal-head">
+      <h2>Settings</h2>
+      <button class="modal-close" data-close="settingsModalOverlay">✕</button>
+    </div>
+    <div class="settings-layout">
+      <div class="settings-nav" id="settingsNav">
+        <button class="snav-btn active" data-section="general">General</button>
+        <button class="snav-btn" data-section="downloads">Downloads</button>
+        <button class="snav-btn" data-section="video">Video</button>
+        <button class="snav-btn" data-section="audio">Audio</button>
+        <button class="snav-btn" data-section="subtitles">Subtitles</button>
+        <button class="snav-btn" data-section="advanced">Advanced</button>
+        <button class="snav-btn" data-section="about">About</button>
+      </div>
+      <div class="settings-content" id="settingsContent">
+
+        <div class="settings-section active" id="sec-general">
+          <h3>General</h3>
+          <div class="setting-row"><label>Theme</label><select id="sTheme" class="field-select"><option value="dark">Dark</option><option value="light">Light</option></select></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sNotifications"/> Show notifications</label></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sMinimizeTray"/> Minimize to tray</label></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sConfirmDelete"/> Confirm before deleting</label></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sConfirmCancel"/> Confirm before canceling</label></div>
+        </div>
+
+        <div class="settings-section" id="sec-downloads">
+          <h3>Downloads</h3>
+          <div class="setting-row"><label>Download Folder</label><div class="folder-row"><input id="sFolder" class="field-input" readonly/><button class="btn-ghost sm" id="sBrowse">Browse…</button></div></div>
+          <div class="setting-row"><label>Concurrent Downloads</label><select id="sConcurrent" class="field-select"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sAutoStart"/> Auto-start queue</label></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sAutoRetry"/> Auto retry on failure</label></div>
+          <div class="setting-row"><label>Retry Count</label><select id="sRetryCount" class="field-select"><option>1</option><option>2</option><option>3</option><option>5</option></select></div>
+          <div class="setting-row"><label>Filename Template</label><input id="sTemplate" class="field-input" placeholder="%(title)s.%(ext)s"/></div>
+        </div>
+
+        <div class="settings-section" id="sec-video">
+          <h3>Video</h3>
+          <div class="setting-row"><label>Default Quality</label><select id="sQuality" class="field-select"><option value="2160">4K 2160p</option><option value="1440">1440p</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option></select></div>
+          <div class="setting-row"><label>Default Container</label><select id="sContainer" class="field-select"><option value="mp4">MP4</option><option value="mkv">MKV</option><option value="webm">WebM</option></select></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sEmbedMeta"/> Embed metadata</label></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sEmbedThumb"/> Embed thumbnail</label></div>
+        </div>
+
+        <div class="settings-section" id="sec-audio">
+          <h3>Audio</h3>
+          <div class="setting-row"><label>Default Format</label><select id="sAudioFormat" class="field-select"><option value="mp3">MP3</option><option value="m4a">M4A</option><option value="opus">Opus</option><option value="wav">WAV</option><option value="flac">FLAC</option></select></div>
+        </div>
+
+        <div class="settings-section" id="sec-subtitles">
+          <h3>Subtitles</h3>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sSubtitles"/> Download subtitles</label></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sAutoSubs"/> Include auto-generated</label></div>
+          <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sEmbedSubs"/> Embed subtitles</label></div>
+        </div>
+
+        <div class="settings-section" id="sec-advanced">
+          <h3>Advanced</h3>
+          <div class="setting-row"><label>Rate Limit (MB/s, 0=unlimited)</label><input type="number" id="sRateLimit" class="field-input" min="0" max="100" step="0.5"/></div>
+          <div class="setting-row"><label>Proxy URL</label><input id="sProxy" class="field-input" placeholder="http://proxy:port"/></div>
+          <div class="setting-row"><button class="btn-ghost sm" id="sReset">Reset All Settings</button></div>
+          <div class="setting-row" id="depsStatus"></div>
+        </div>
+
+        <div class="settings-section" id="sec-about">
+          <h3>About</h3>
+          <div class="about-card">
+            <div class="about-logo">⬇</div>
+            <div class="about-name">Syvo Downloader</div>
+            <div class="about-ver" id="aboutVersion">v1.0.0</div>
+            <p class="about-desc">A powerful desktop media downloader. Use only for content you own or are authorized to download.</p>
+            <div class="dep-row" id="depRow"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-ghost" data-close="settingsModalOverlay">Cancel</button>
+      <button class="btn-primary" id="saveSettingsBtn">Save Settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate Detection Dialog -->
+<div class="modal-overlay hidden" id="dupModalOverlay">
+  <div class="modal" id="dupModal">
+    <div class="modal-head"><h2>File Already Exists</h2></div>
+    <div class="modal-body">
+      <p style="color:var(--text2);font-size:14px" id="dupMessage">A file with this name already exists in the download folder.</p>
+    </div>
+    <div class="modal-foot" style="flex-wrap:wrap;gap:8px">
+      <button class="btn-ghost" id="dupSkip">Skip</button>
+      <button class="btn-ghost" id="dupRename">Auto Rename</button>
+      <button class="btn-ghost" id="dupReplace">Replace</button>
+      <button class="btn-primary" id="dupDownload">Download Anyway</button>
+    </div>
+  </div>
+</div>
+
+<!-- Analyzing spinner overlay -->
+<div class="modal-overlay hidden" id="analyzingOverlay">
+  <div class="analyzing-box">
+    <div class="spinner"></div>
+    <p>Analyzing URL…</p>
+    <button class="btn-ghost sm" id="cancelAnalyze">Cancel</button>
+  </div>
+</div>
+
+<script src="renderer.js"></script>
 </body>
 </html>
