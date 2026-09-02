@@ -19,6 +19,19 @@ function syncModeSelects(qualitySel, formatSel, mode, defaults = {}) {
   fillSelect(formatSel, mode === 'audio' ? AUDIO_FORMATS : VIDEO_FORMATS, mode === 'audio' ? (defaults.audioFormat || 'mp3') : (defaults.videoFormat || 'mp4'));
 }
 
+/* ─── Subtitle languages ─────────────────────────────── */
+const SUB_LANGUAGES = [['en','English'],['hi','Hindi'],['es','Spanish'],['fr','French'],['de','German'],['ja','Japanese'],['ko','Korean'],['ar','Arabic']];
+function buildLangGrid(container, selectedCsv) {
+  const selected = new Set((selectedCsv || 'en').split(',').map(s => s.trim()).filter(Boolean));
+  container.innerHTML = SUB_LANGUAGES.map(([code, label]) =>
+    `<label><input type="checkbox" value="${code}" ${selected.has(code) ? 'checked' : ''}/> ${label}</label>`
+  ).join('');
+}
+function readLangGrid(container) {
+  const checked = $$(`#${container.id} input:checked`).map(i => i.value);
+  return checked.length ? checked.join(',') : 'en';
+}
+
 /* ─── Helpers ───────────────────────────────────────── */
 function fmtDur(sec) {
   if (!sec) return '—';
@@ -237,10 +250,14 @@ function showInfoModal(meta, url) {
 
   $('#infoMode').value = $('#dlMode').value || 'video';
   applyInfoModeOptions(meta);
+  $('#infoSubs').checked = false;
+  buildLangGrid($('#infoLangGrid'), S.settings.subtitleLangs);
+  $('#infoLangGrid').classList.add('hidden');
   openModal('#infoModalOverlay');
 }
 
 $('#infoMode').onchange = () => { if (S.pendingMeta) applyInfoModeOptions(S.pendingMeta.meta); };
+$('#infoSubs').onchange = e => { $('#infoLangGrid').classList.toggle('hidden', !e.target.checked); };
 
 /* ─── Duplicate detection ────────────────────────────── */
 let dupResolver = null;
@@ -275,7 +292,7 @@ async function warnIfLowDisk(meta, mode, quality) {
 async function queueSingleItem(base) {
   const ext = base.mode === 'audio' ? (base.audioFormat || 'mp3') : (base.container || 'mp4');
   try {
-    const { exists } = await window.api.checkFileExists(base.title, ext);
+    const { exists } = await window.api.checkFileExists(base.title, ext, base.uploader);
     if (exists) {
       const action = await askDupAction();
       if (action === 'skip') return;
@@ -298,6 +315,7 @@ $('#addToQueueBtn').onclick = async () => {
   warnIfLowDisk(meta, mode, quality);
   const item = { url, title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, subtitles, playlist: false };
   if (mode === 'audio') item.audioFormat = formatVal; else item.container = formatVal;
+  if (subtitles) item.subLangs = readLangGrid($('#infoLangGrid'));
   await queueSingleItem(item);
 };
 
@@ -359,6 +377,9 @@ async function openSettings() {
   $('#sEmbedSubs').checked = !!s.embedSubs;
   $('#sRateLimit').value = s.rateLimitMbps || 0;
   $('#sProxy').value = s.proxy || '';
+  $('#sCookies').value = s.cookiesFromBrowser || 'none';
+  $('#sFolderTemplate').value = s.folderTemplate || '';
+  buildLangGrid($('#sLangGrid'), s.subtitleLangs);
   const ver = await window.api.getVersion();
   $('#aboutVersion').textContent = `v${ver}`;
   loadDeps();
@@ -378,6 +399,22 @@ async function loadDeps() {
 
 $('#sBrowse').onclick = async () => { const p = await window.api.pickFolder(); if (p) $('#sFolder').value = p; };
 $('#sReset').onclick = async () => { const s = await window.api.resetSettings(); S.settings = s; openSettings(); };
+
+/** Insert `text` at the current cursor position of an <input>, replacing any selection. */
+function insertAtCursor(input, text) {
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.value = input.value.slice(0, start) + text + input.value.slice(end);
+  input.focus();
+  input.setSelectionRange(start + text.length, start + text.length);
+}
+$('#templateTokens').addEventListener('click', e => {
+  const btn = e.target.closest('[data-token]');
+  if (btn) insertAtCursor($('#sTemplate'), btn.dataset.token);
+});
+$$('[data-ftoken]').forEach(btn => {
+  btn.onclick = () => insertAtCursor($('#sFolderTemplate'), btn.dataset.ftoken);
+});
 
 $('#settingsNav').addEventListener('click', e => {
   const btn = e.target.closest('.snav-btn');
@@ -410,6 +447,9 @@ $('#saveSettingsBtn').onclick = async () => {
     embedSubs: $('#sEmbedSubs').checked,
     rateLimitMbps: +$('#sRateLimit').value,
     proxy: $('#sProxy').value,
+    cookiesFromBrowser: $('#sCookies').value,
+    folderTemplate: $('#sFolderTemplate').value.trim(),
+    subtitleLangs: readLangGrid($('#sLangGrid')),
   };
   S.settings = await window.api.setSettings(s);
   applyTheme(s.theme);
@@ -464,6 +504,9 @@ function queueItemHTML(item) {
   const isFailed = item.status === 'failed';
   const isPaused = item.status === 'paused';
   const pct = Math.round(item.progress || 0);
+  const rawIdx = S.queue.findIndex(i => i.id === item.id);
+  const isFirst = rawIdx <= 0;
+  const isLast = rawIdx < 0 || rawIdx >= S.queue.length - 1;
   const fillClass = isDone ? 'done' : isFailed ? 'failed' : '';
   const slClass = `sl-${item.status}`;
   const slLabel = { queued:'Queued', downloading:'Downloading', completed:'Done', failed:'Failed', paused:'Paused', canceled:'Canceled' }[item.status] || item.status;
@@ -488,6 +531,10 @@ function queueItemHTML(item) {
     <div class="item-actions">
       <span class="status-label ${slClass}">${slLabel}</span>
       <div class="action-row">
+        <div class="reorder-col">
+          <button class="act-btn sm" data-act="move-up" title="Move up" ${isFirst ? 'disabled' : ''}>▲</button>
+          <button class="act-btn sm" data-act="move-down" title="Move down" ${isLast ? 'disabled' : ''}>▼</button>
+        </div>
         ${isActive ? `<button class="act-btn" data-act="pause" title="Pause">⏸</button>` : ''}
         ${isPaused ? `<button class="act-btn success" data-act="resume" title="Resume">▶</button>` : ''}
         ${isFailed ? `<button class="act-btn" data-act="retry" title="Retry">↺</button>` : ''}
@@ -514,6 +561,8 @@ function bindItemEvents(el) {
       else if (act === 'open-folder') window.api.openFolder(item?.file || null);
       else if (act === 'open-file' && item?.file) window.api.openFile(item.file);
       else if (act === 'remove') window.api.removeItem(id);
+      else if (act === 'move-up') window.api.moveItem(id, 'up');
+      else if (act === 'move-down') window.api.moveItem(id, 'down');
     };
   });
 }

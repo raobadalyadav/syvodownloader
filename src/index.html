@@ -279,6 +279,7 @@
         <label class="checkbox-label"><input type="checkbox" id="infoSubs"/> Download subtitles</label>
         <label class="checkbox-label"><input type="checkbox" id="infoEmbed"/> Embed metadata</label>
       </div>
+      <div class="lang-grid hidden" id="infoLangGrid"></div>
     </div>
     <div class="modal-foot">
       <button class="btn-ghost" data-close="infoModalOverlay">Cancel</button>
@@ -346,7 +347,27 @@
           <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sAutoStart"/> Auto-start queue</label></div>
           <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sAutoRetry"/> Auto retry on failure</label></div>
           <div class="setting-row"><label>Retry Count</label><select id="sRetryCount" class="field-select"><option>1</option><option>2</option><option>3</option><option>5</option></select></div>
-          <div class="setting-row"><label>Filename Template</label><input id="sTemplate" class="field-input" placeholder="%(title)s.%(ext)s"/></div>
+          <div class="setting-row">
+            <label>Filename Template</label>
+            <input id="sTemplate" class="field-input" placeholder="%(title)s.%(ext)s"/>
+            <div class="token-row" id="templateTokens">
+              <button type="button" class="btn-ghost sm" data-token="%(title).180B">Title</button>
+              <button type="button" class="btn-ghost sm" data-token="%(uploader)s">Uploader</button>
+              <button type="button" class="btn-ghost sm" data-token="%(upload_date)s">Upload Date</button>
+              <button type="button" class="btn-ghost sm" data-token="%(id)s">ID</button>
+              <button type="button" class="btn-ghost sm" data-token="%(ext)s">Ext</button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <label>Folder Template <span style="text-transform:none;font-weight:400;color:var(--text3)">(optional subfolders)</span></label>
+            <input id="sFolderTemplate" class="field-input" placeholder="{uploader}/{year}"/>
+            <div class="token-row">
+              <button type="button" class="btn-ghost sm" data-ftoken="{uploader}">Uploader</button>
+              <button type="button" class="btn-ghost sm" data-ftoken="{year}">Year</button>
+              <button type="button" class="btn-ghost sm" data-ftoken="{month}">Month</button>
+              <button type="button" class="btn-ghost sm" data-ftoken="{mode}">Mode</button>
+            </div>
+          </div>
         </div>
 
         <div class="settings-section" id="sec-video">
@@ -367,12 +388,28 @@
           <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sSubtitles"/> Download subtitles</label></div>
           <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sAutoSubs"/> Include auto-generated</label></div>
           <div class="setting-row"><label class="checkbox-label"><input type="checkbox" id="sEmbedSubs"/> Embed subtitles</label></div>
+          <div class="setting-row">
+            <label>Preferred Languages</label>
+            <div class="lang-grid" id="sLangGrid"></div>
+          </div>
         </div>
 
         <div class="settings-section" id="sec-advanced">
           <h3>Advanced</h3>
           <div class="setting-row"><label>Rate Limit (MB/s, 0=unlimited)</label><input type="number" id="sRateLimit" class="field-input" min="0" max="100" step="0.5"/></div>
           <div class="setting-row"><label>Proxy URL</label><input id="sProxy" class="field-input" placeholder="http://proxy:port"/></div>
+          <div class="setting-row">
+            <label>Cookies Source</label>
+            <select id="sCookies" class="field-select">
+              <option value="none">None</option>
+              <option value="chrome">Chrome</option>
+              <option value="firefox">Firefox</option>
+              <option value="edge">Edge</option>
+              <option value="brave">Brave</option>
+              <option value="opera">Opera</option>
+            </select>
+            <p style="font-size:11px;color:var(--text3);margin-top:4px">Needed for Instagram, Facebook, or any private/login-gated content — reads cookies straight from that browser's login session. Close the browser first if it locks the cookie file.</p>
+          </div>
           <div class="setting-row"><button class="btn-ghost sm" id="sReset">Reset All Settings</button></div>
           <div class="setting-row" id="depsStatus"></div>
         </div>

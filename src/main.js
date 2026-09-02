@@ -45,6 +45,9 @@ const DEFAULT_SETTINGS = {
   confirmCancel: true,
   firstRunComplete: false,
   windowBounds: null,
+  cookiesFromBrowser: 'none',
+  subtitleLangs: 'en',
+  folderTemplate: '',
 };
 
 function loadSettings() {
@@ -196,11 +199,17 @@ function updateTrayMenu() {
 }
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
+function cookieArgs() {
+  return settings.cookiesFromBrowser && settings.cookiesFromBrowser !== 'none'
+    ? ['--cookies-from-browser', settings.cookiesFromBrowser]
+    : [];
+}
+
 async function inspectUrl(url, forceSingle = false) {
   return new Promise((resolve, reject) => {
     if (!/^https?:\/\//i.test(url.trim())) return reject(new Error('Please enter a valid URL starting with http:// or https://'));
     const yt = locateBinary('yt-dlp');
-    const args = ['--dump-single-json', '--no-warnings', '--skip-download'];
+    const args = ['--dump-single-json', '--no-warnings', '--skip-download', ...cookieArgs()];
     // Only force single-video mode when explicitly asked; otherwise let yt-dlp
     // auto-detect, which correctly resolves playlist/mix URLs (its own default
     // favors the playlist when a URL refers to both a video and a playlist).
@@ -298,7 +307,19 @@ function buildFormatStr(mode, quality, hasFfmpeg) {
   return `best[height<=${h}][ext=mp4]/best[height<=${h}]/best`;
 }
 
-function computeOutputPath(title, ext) {
+function resolveFolderTemplate(vars = {}) {
+  if (!settings.folderTemplate) return '';
+  const now = new Date();
+  const safe = s => String(s || '').replace(/[\\/:*?"<>|]/g, '_').trim() || 'Unknown';
+  return settings.folderTemplate
+    .replace(/\{uploader\}/gi, safe(vars.uploader))
+    .replace(/\{year\}/gi, String(now.getFullYear()))
+    .replace(/\{month\}/gi, String(now.getMonth() + 1).padStart(2, '0'))
+    .replace(/\{mode\}/gi, safe(vars.mode))
+    .split('/').filter(Boolean).join(path.sep);
+}
+
+function computeOutputPath(title, ext, uploader) {
   const template = settings.filenameTemplate || '%(title).180B [%(id)s].%(ext)s';
   const safeTitle = String(title || 'download').replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
   const name = template
@@ -308,7 +329,7 @@ function computeOutputPath(title, ext) {
     .replace(/\s*\[\s*\]/g, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
-  return path.join(settings.outputDir, name);
+  return path.join(settings.outputDir, resolveFolderTemplate({ uploader }), name);
 }
 
 function buildArgs(item) {
@@ -319,11 +340,13 @@ function buildArgs(item) {
   if (item.forceRename) {
     template = template.replace(/(\.%\(ext\)s)$/, ' (%(autonumber)s)$1');
   }
-  const output = path.join(settings.outputDir, template);
+  const folder = resolveFolderTemplate({ uploader: item.uploader, mode: item.mode });
+  const output = path.join(settings.outputDir, folder, template);
   const args = [
     '--newline', '--no-warnings', '--progress',
     '-o', output,
     '--restrict-filenames',
+    ...cookieArgs(),
   ];
   if (item.forceRename) args.push('--autonumber-start', '1');
   if (item.forceOverwrite) args.push('--force-overwrites');
@@ -347,7 +370,7 @@ function buildArgs(item) {
   if (item.subtitles) {
     args.push('--write-subs');
     if (item.autoSubtitles) args.push('--write-auto-subs');
-    args.push('--sub-langs', item.subLang || 'en', '--convert-subs', 'srt');
+    args.push('--sub-langs', item.subLangs || settings.subtitleLangs || 'en', '--convert-subs', 'srt');
     if (item.embedSubs && hasFfmpeg) args.push('--embed-subs');
   }
   if (item.playlist) args.push('--yes-playlist'); else args.push('--no-playlist');
@@ -689,8 +712,8 @@ app.whenReady().then(() => {
     return urls;
   });
 
-  ipcMain.handle('file:check-exists', (_e, title, ext) => {
-    const p = computeOutputPath(title, ext);
+  ipcMain.handle('file:check-exists', (_e, title, ext, uploader) => {
+    const p = computeOutputPath(title, ext, uploader);
     return { exists: fs.existsSync(p), path: p };
   });
 

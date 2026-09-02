@@ -2,9 +2,11 @@
 
 A Windows-style desktop application for downloading permitted online video/audio content. It provides a download queue, video/audio modes, quality selection, real-time progress, history, search, settings, playlist support, subtitles, duplicate-file detection, and a first-run responsible-use confirmation — built with Electron, [yt-dlp](https://github.com/yt-dlp/yt-dlp), and [FFmpeg](https://ffmpeg.org/).
 
+Because the download engine is generic (no site-specific code), it works with any of the [1800+ sites yt-dlp supports](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) — not just YouTube, but Instagram, Facebook, and most other video platforms too. Private or login-gated content (common on Instagram/Facebook) needs the **Cookies Source** setting (Settings → Advanced) pointed at a browser you're logged into.
+
 ## Important usage note
 
-Use this app only for media you own, have permission to download, or where the platform/license explicitly permits downloading. YouTube's official help documents that users can download their own uploaded videos and use Premium offline downloads; other users' videos generally cannot be downloaded through YouTube's own workflow. Review the platform's current terms and the content license before using any downloader. The app shows a one-time responsible-use confirmation on first launch.
+Use this app only for media you own, have permission to download, or where the platform/license explicitly permits downloading. Every platform's official help/terms generally allow downloading your own uploaded content, but downloading other people's content without authorization is usually against that platform's terms — review the specific platform's current terms and the content license before downloading anything. The app shows a one-time responsible-use confirmation on first launch. This is a local desktop tool only — it does not host, proxy, or redistribute any media through a server.
 
 ---
 
@@ -57,14 +59,15 @@ Place `yt-dlp.exe` and `ffmpeg.exe` in `bin/` before building — `electron-buil
 
 ## Features
 
-- Paste/drag-and-drop a URL, or import a `.txt` file of URLs, or add a full playlist with per-item selection
-- Metadata analysis (title, thumbnail, duration, channel, available formats, subtitles, chapters)
-- Video (MP4/MKV/WebM) and audio-only (MP3/M4A/Opus/WAV/FLAC) modes with quality/format pickers and an advanced format table
-- Queue with pause/resume/cancel/retry (per item and globally), concurrency control, auto-retry, and persistence across restarts
+- Paste/drag-and-drop a URL, or import a `.txt` file of URLs, or add a full playlist with per-item selection (playlist links are auto-detected)
+- Works with YouTube, Instagram, Facebook, and any other site yt-dlp supports; a **Cookies Source** setting unlocks private/login-gated content
+- Metadata analysis (title, thumbnail, duration, channel, available formats, subtitles, chapters), with estimated file size shown right in the quality picker
+- Video (MP4/MKV/WebM) and audio-only (MP3/M4A/Opus/WAV/FLAC) modes with mode-aware quality/format pickers
+- Queue with pause/resume/cancel/retry (per item and globally), manual reordering, concurrency control, auto-retry, and persistence across restarts
 - Duplicate-file detection (Skip / Rename / Replace / Download Anyway) and a disk-space advisory before large downloads
-- Search, sort, and filter across the queue and download history
+- Search and filter across the queue and download history; downloaded file size shown in both
 - Desktop notifications, system tray with quick controls, dark/light theme
-- Settings for download folder, concurrency, filename template, subtitles, metadata/thumbnail embedding, rate limiting, and proxy
+- Settings for download folder + optional folder template (`{uploader}/{year}`), concurrency, filename template (with a token-insert builder), subtitle languages, metadata/thumbnail embedding, rate limiting, proxy, and cookies source
 - Window size/position is remembered between launches
 
 ## Keyboard shortcuts

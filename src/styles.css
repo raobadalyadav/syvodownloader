@@ -114,6 +114,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent) !importa
 .act-btn:hover { background: var(--surface3); color: var(--text); }
 .act-btn.danger:hover { background: var(--red); color: #fff; border-color: var(--red); }
 .act-btn.success:hover { background: var(--green); color: #fff; border-color: var(--green); }
+.act-btn:disabled { opacity: .3; cursor: default; }
+.act-btn:disabled:hover { background: var(--surface2); color: var(--text2); }
+.act-btn.sm { width: 22px; height: 22px; font-size: 11px; }
+.reorder-col { display: flex; flex-direction: column; gap: 2px; }
 .status-label { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
 .sl-queued { background: rgba(255,34,49,.15); color: var(--accent2); }
 .sl-downloading { background: rgba(255,34,49,.2); color: var(--accent2); }
@@ -207,6 +211,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--accent) !importa
 .setting-row { display: flex; flex-direction: column; gap: 5px; }
 .setting-row > label:not(.checkbox-label) { font-size: 12px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .4px; }
 .dep-item { font-size: 12px; color: var(--text2); padding: 6px 0; display: flex; gap: 8px; align-items: center; }
+.token-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.lang-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.lang-grid label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); font-weight: 400; text-transform: none; cursor: pointer; }
+.lang-grid input { accent-color: var(--accent); }
 .dep-ok { color: var(--green); }
 .dep-fail { color: var(--red); }
 
