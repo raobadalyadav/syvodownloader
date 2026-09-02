@@ -17,6 +17,9 @@
     "appId": "com.svotech.desktopdownloader",
     "productName": "Desktop Video Downloader",
     "files": ["src/**/*", "package.json"],
+    "extraResources": [
+      { "from": "bin", "to": "bin", "filter": ["**/*"] }
+    ],
     "directories": { "output": "dist" },
     "win": { "target": ["nsis", "portable"] }
   }

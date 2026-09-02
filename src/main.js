@@ -43,6 +43,8 @@ const DEFAULT_SETTINGS = {
   startWithSystem: false,
   confirmDelete: true,
   confirmCancel: true,
+  firstRunComplete: false,
+  windowBounds: null,
 };
 
 function loadSettings() {
@@ -123,9 +125,13 @@ function emit(channel, data) {
 }
 
 function createWindow() {
+  const b = settings.windowBounds;
+  const validBounds = b && Number.isFinite(b.width) && Number.isFinite(b.height) && b.width >= 1000 && b.height >= 650;
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 920,
+    width: validBounds ? b.width : 1480,
+    height: validBounds ? b.height : 920,
+    x: validBounds && Number.isFinite(b.x) ? b.x : undefined,
+    y: validBounds && Number.isFinite(b.y) ? b.y : undefined,
     minWidth: 1100,
     minHeight: 680,
     frame: false,
@@ -147,9 +153,18 @@ function createWindow() {
       e.preventDefault();
       mainWindow.hide();
     } else {
+      saveWindowBounds();
       persistQueue();
     }
   });
+}
+
+function saveWindowBounds() {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized()) return;
+    settings.windowBounds = mainWindow.getBounds();
+    saveSettings(settings);
+  } catch {}
 }
 
 function createTray() {
@@ -272,16 +287,35 @@ function buildFormatStr(mode, quality, hasFfmpeg) {
   return `best[height<=${h}][ext=mp4]/best[height<=${h}]/best`;
 }
 
+function computeOutputPath(title, ext) {
+  const template = settings.filenameTemplate || '%(title).180B [%(id)s].%(ext)s';
+  const safeTitle = String(title || 'download').replace(/[\\/:*?"<>|]/g, '_').slice(0, 180);
+  const name = template
+    .replace(/%\(title\)\.?\d*[sB]?/g, safeTitle)
+    .replace(/%\(ext\)s/g, ext || 'mp4')
+    .replace(/%\(id\)s/g, '')
+    .replace(/\s*\[\s*\]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return path.join(settings.outputDir, name);
+}
+
 function buildArgs(item) {
   const yt = locateBinary('yt-dlp');
   const ffmpegPath = locateBinary('ffmpeg');
   const hasFfmpeg = fs.existsSync(ffmpegPath);
-  const output = path.join(settings.outputDir, settings.filenameTemplate || '%(title).180B [%(id)s].%(ext)s');
+  let template = settings.filenameTemplate || '%(title).180B [%(id)s].%(ext)s';
+  if (item.forceRename) {
+    template = template.replace(/(\.%\(ext\)s)$/, ' (%(autonumber)s)$1');
+  }
+  const output = path.join(settings.outputDir, template);
   const args = [
     '--newline', '--no-warnings', '--progress',
     '-o', output,
     '--restrict-filenames',
   ];
+  if (item.forceRename) args.push('--autonumber-start', '1');
+  if (item.forceOverwrite) args.push('--force-overwrites');
   if (hasFfmpeg) args.splice(3, 0, '--ffmpeg-location', ffmpegPath);
 
   if (item.mode === 'audio') {
@@ -632,6 +666,11 @@ app.whenReady().then(() => {
     return urls;
   });
 
+  ipcMain.handle('file:check-exists', (_e, title, ext) => {
+    const p = computeOutputPath(title, ext);
+    return { exists: fs.existsSync(p), path: p };
+  });
+
   ipcMain.handle('disk:check', async (_e, neededBytes) => {
     try {
       const stat = fs.statfsSync(settings.outputDir);
@@ -654,8 +693,9 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  saveWindowBounds();
   persistQueue();
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => persistQueue());
+app.on('before-quit', () => { saveWindowBounds(); persistQueue(); });

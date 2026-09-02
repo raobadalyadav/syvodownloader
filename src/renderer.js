@@ -22,17 +22,21 @@ function fmtDate(iso) { if (!iso) return '—'; try { return new Date(iso).toLoc
 /* ─── Modal helpers ─────────────────────────────────── */
 function openModal(id) { $(id).classList.remove('hidden'); }
 function closeModal(id) { $(id).classList.add('hidden'); }
+const UNDISMISSABLE = ['analyzingOverlay', 'firstRunModalOverlay', 'dupModalOverlay'];
 document.addEventListener('click', e => {
   if (e.target.dataset.close) closeModal('#' + e.target.dataset.close);
-  if (e.target.classList.contains('modal-overlay') && e.target.id !== 'analyzingOverlay') closeModal('#' + e.target.id);
+  if (e.target.classList.contains('modal-overlay') && !UNDISMISSABLE.includes(e.target.id)) closeModal('#' + e.target.id);
 });
 
 /* ─── Menubar dropdowns ─────────────────────────────── */
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') $$('.modal-overlay').forEach(m => { if (!m.classList.contains('hidden') && m.id !== 'analyzingOverlay') closeModal('#' + m.id); });
+  if (e.key === 'Escape') $$('.modal-overlay').forEach(m => { if (!m.classList.contains('hidden') && !UNDISMISSABLE.includes(m.id)) closeModal('#' + m.id); });
   if ((e.ctrlKey || e.metaKey) && e.key === 'v') { e.preventDefault(); showUrlModal(); }
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); showUrlModal(); }
   if ((e.ctrlKey || e.metaKey) && e.key === ',') openSettings();
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') $('#searchInput').focus();
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); window.api.pauseAll(); }
+  if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); window.api.resumeAll(); }
 });
 
 /* ─── Menu actions ──────────────────────────────────── */
@@ -42,6 +46,7 @@ document.querySelectorAll('[data-action]').forEach(btn => {
     const a = btn.dataset.action;
     if (a === 'paste-url') showUrlModal();
     else if (a === 'add-playlist') showUrlModal(true);
+    else if (a === 'import-file') importUrlsFromFile();
     else if (a === 'open-downloads') window.api.openDownloads();
     else if (a === 'export-history') window.api.exportHistory();
     else if (a === 'quit') window.api.closeWindow();
@@ -129,6 +134,32 @@ $('#analyzeBtn').onclick = async () => {
 };
 $('#cancelAnalyze').onclick = () => { S.analyzeAbort = true; closeModal('#analyzingOverlay'); };
 
+/* ─── Import URLs from file ─────────────────────────── */
+$('#importFileBtn').onclick = importUrlsFromFile;
+async function importUrlsFromFile() {
+  const urls = await window.api.importUrls();
+  if (!urls || !urls.length) { toast('warn', 'No valid URLs found in that file.'); return; }
+  const mode = $('#modeSelect').value, quality = $('#qualitySelect').value, container = $('#formatSelect').value;
+  let added = 0, failed = 0;
+  openModal('#analyzingOverlay');
+  const items = [];
+  for (let i = 0; i < urls.length; i++) {
+    $('.analyzing-box p').textContent = `Importing ${i + 1} of ${urls.length}…`;
+    if (S.analyzeAbort) break;
+    try {
+      const meta = await window.api.inspect(urls[i], false);
+      if (meta.isPlaylist) { failed++; continue; }
+      items.push({ url: urls[i], title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, container, subtitles: false, playlist: false });
+      added++;
+    } catch { failed++; }
+  }
+  S.analyzeAbort = false;
+  $('.analyzing-box p').textContent = 'Analyzing URL…';
+  closeModal('#analyzingOverlay');
+  if (items.length) await window.api.addBatch(items);
+  toast(failed && !added ? 'error' : failed ? 'warn' : 'success', `${added} added${failed ? `, ${failed} failed` : ''}.`);
+}
+
 /* ─── Video Info Modal ──────────────────────────────── */
 function showInfoModal(meta, url) {
   S.pendingMeta = { meta, url };
@@ -166,6 +197,51 @@ $('#toggleFormats').onclick = () => {
   $('#toggleFormats').textContent = hidden ? '▼ Show available formats' : '▲ Hide formats';
 };
 
+/* ─── Duplicate detection ────────────────────────────── */
+let dupResolver = null;
+function askDupAction() {
+  return new Promise(resolve => { dupResolver = resolve; openModal('#dupModalOverlay'); });
+}
+function resolveDup(action) {
+  closeModal('#dupModalOverlay');
+  if (dupResolver) { dupResolver(action); dupResolver = null; }
+}
+$('#dupSkip').onclick = () => resolveDup('skip');
+$('#dupRename').onclick = () => resolveDup('rename');
+$('#dupReplace').onclick = () => resolveDup('replace');
+$('#dupDownload').onclick = () => resolveDup('download-anyway');
+
+/* ─── Disk space advisory ────────────────────────────── */
+async function warnIfLowDisk(meta, mode, quality) {
+  let bytes = 0;
+  if (mode === 'audio') {
+    bytes = Math.max(...(meta.formats || []).filter(f => f.abr).map(f => f.filesize || 0), 0);
+  } else {
+    const match = (meta.formats || []).filter(f => f.height && f.height <= +quality).sort((a, b) => b.height - a.height)[0];
+    bytes = match?.filesize || 0;
+  }
+  if (!bytes) return;
+  try {
+    const { enough, free } = await window.api.checkDisk(bytes);
+    if (!enough) toast('warn', `Low disk space: need ~${fmtSize(bytes)}, only ${fmtSize(free)} free.`);
+  } catch {}
+}
+
+async function queueSingleItem(base) {
+  const ext = base.mode === 'audio' ? (S.settings.preferredAudioFormat || 'mp3') : (base.container || 'mp4');
+  try {
+    const { exists } = await window.api.checkFileExists(base.title, ext);
+    if (exists) {
+      const action = await askDupAction();
+      if (action === 'skip') return;
+      if (action === 'rename') base.forceRename = true;
+      if (action === 'replace' || action === 'download-anyway') base.forceOverwrite = true;
+    }
+  } catch {}
+  await window.api.addToQueue(base);
+  toast('success', `Added "${base.title}" to queue.`);
+}
+
 $('#addToQueueBtn').onclick = async () => {
   if (!S.pendingMeta) return;
   const { meta, url } = S.pendingMeta;
@@ -173,8 +249,9 @@ $('#addToQueueBtn').onclick = async () => {
   const quality = $('#infoQuality').value;
   const container = $('#infoFormat').value;
   const subtitles = $('#infoSubs').checked;
-  await window.api.addToQueue({ url, title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, container, subtitles, playlist: false });
   closeModal('#infoModalOverlay');
+  warnIfLowDisk(meta, mode, quality);
+  await queueSingleItem({ url, title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, container, subtitles, playlist: false });
 };
 
 /* ─── Playlist Modal ─────────────────────────────────── */
@@ -434,14 +511,17 @@ function updateCount(n) {
   $('#itemCount').textContent = `${n} item${n === 1 ? '' : 's'}`;
 }
 
-/* ─── Error helper ──────────────────────────────────── */
-function showError(msg) {
+/* ─── Toast helper ──────────────────────────────────── */
+function toast(type, msg, ms = 5000) {
   const el = document.createElement('div');
-  el.style.cssText = 'position:fixed;top:20px;right:20px;background:var(--red);color:#fff;padding:14px 20px;border-radius:8px;z-index:9999;font-size:13px;max-width:360px;line-height:1.5;box-shadow:0 8px 32px rgba(0,0,0,.5)';
-  el.textContent = msg;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 5000);
+  el.className = `toast toast-${type}`;
+  const icon = { success: '✓', error: '✕', warn: '⚠', info: 'ℹ' }[type] || '';
+  el.innerHTML = `<span>${icon}</span><span>${esc(msg)}</span><button class="toast-close">✕</button>`;
+  el.querySelector('.toast-close').onclick = () => el.remove();
+  $('#toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), ms);
 }
+function showError(msg) { toast('error', msg); }
 
 /* ─── IPC listeners ─────────────────────────────────── */
 window.api.on('queue:updated', queue => {
@@ -452,7 +532,7 @@ window.api.on('queue:updated', queue => {
 window.api.on('queue:restored', queue => {
   S.queue = queue;
   renderQueue();
-  if (queue.length) showError(`${queue.length} interrupted download(s) restored.`);
+  if (queue.length) toast('info', `${queue.length} interrupted download(s) restored.`);
 });
 window.api.on('open-settings', () => openSettings());
 
@@ -460,6 +540,51 @@ window.api.on('open-settings', () => openSettings());
 $('#modeSelect').onchange = e => { $('#dlMode').value = e.target.value; };
 $('#qualitySelect').onchange = e => { $('#dlQuality').value = e.target.value; };
 $('#formatSelect').onchange = e => { $('#dlFormat').value = e.target.value; };
+
+/* ─── Drag & drop URL ────────────────────────────────── */
+let dragDepth = 0;
+window.addEventListener('dragenter', e => {
+  e.preventDefault();
+  dragDepth++;
+  $('#dropOverlay').classList.remove('hidden');
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('dragleave', () => {
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) $('#dropOverlay').classList.add('hidden');
+});
+window.addEventListener('drop', e => {
+  e.preventDefault();
+  dragDepth = 0;
+  $('#dropOverlay').classList.add('hidden');
+  const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').trim();
+  if (!/^https?:\/\//i.test(text)) { toast('warn', 'Drop a valid http(s) link.'); return; }
+  showUrlModal();
+  $('#urlInput').value = text;
+});
+
+/* ─── First-run ──────────────────────────────────────── */
+$('#frConsent').onchange = e => { $('#frFinish').disabled = !e.target.checked; };
+$('#frBrowse').onclick = async () => { const p = await window.api.pickFolder(); if (p) $('#frFolder').value = p; };
+$('#frFinish').onclick = async () => {
+  S.settings = await window.api.setSettings({
+    firstRunComplete: true,
+    outputDir: $('#frFolder').value || S.settings.outputDir,
+    theme: $('#frTheme').value,
+  });
+  applyTheme(S.settings.theme);
+  updatePathLabel();
+  closeModal('#firstRunModalOverlay');
+};
+async function showFirstRun() {
+  $('#frFolder').value = S.settings.outputDir || '';
+  $('#frTheme').value = S.settings.theme || 'dark';
+  const deps = await window.api.checkDeps();
+  $('#frDepRow').innerHTML = `
+    <span class="dep-chip ${deps.ytdlp.found ? 'ok' : 'missing'}">yt-dlp ${deps.ytdlp.found ? '✓' : '✗ Missing'}</span>
+    <span class="dep-chip ${deps.ffmpeg.found ? 'ok' : 'missing'}">FFmpeg ${deps.ffmpeg.found ? '✓' : '✗ Missing'}</span>`;
+  openModal('#firstRunModalOverlay');
+}
 
 /* ─── Boot ──────────────────────────────────────────── */
 (async () => {
@@ -469,4 +594,5 @@ $('#formatSelect').onchange = e => { $('#dlFormat').value = e.target.value; };
   applyTheme(S.settings.theme);
   updatePathLabel();
   renderQueue();
+  if (!S.settings.firstRunComplete) showFirstRun();
 })();

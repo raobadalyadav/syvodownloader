@@ -58,6 +58,9 @@ contextBridge.exposeInMainWorld('api', {
   // Disk
   checkDisk:      bytes     => ipcRenderer.invoke('disk:check', bytes),
 
+  // Duplicate detection
+  checkFileExists: (title, ext) => ipcRenderer.invoke('file:check-exists', title, ext),
+
   // Queue move
   moveItem:       (id, dir) => ipcRenderer.invoke('queue:move', id, dir),
 

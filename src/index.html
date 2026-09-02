@@ -8,10 +8,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="styles.css"/>
-  <!-- Toast container -->
-  <div id="toastContainer"></div>
 </head>
 <body>
+
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
+<!-- DRAG & DROP OVERLAY -->
+<div class="drop-overlay hidden" id="dropOverlay">⬇ Drop link to add download</div>
 
 <!-- TITLEBAR -->
 <header class="titlebar" id="titlebar">
@@ -419,6 +423,36 @@
     <div class="spinner"></div>
     <p>Analyzing URL…</p>
     <button class="btn-ghost sm" id="cancelAnalyze">Cancel</button>
+  </div>
+</div>
+
+<!-- First-Run Welcome Dialog -->
+<div class="modal-overlay hidden" id="firstRunModalOverlay">
+  <div class="modal wide" id="firstRunModal">
+    <div class="modal-head">
+      <h2>Welcome to Syvo Downloader</h2>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--text2);font-size:13px;line-height:1.6">A local-first desktop downloader. No account, no cloud upload — files go straight to your machine.</p>
+      <div class="setting-row">
+        <label>Download Folder</label>
+        <div class="folder-row"><input id="frFolder" class="field-input" readonly/><button class="btn-ghost sm" id="frBrowse">Browse…</button></div>
+      </div>
+      <div class="setting-row">
+        <label>Theme</label>
+        <select id="frTheme" class="field-select"><option value="dark">Dark</option><option value="light">Light</option></select>
+      </div>
+      <div class="setting-row">
+        <label>Dependencies</label>
+        <div class="dep-row" id="frDepRow"></div>
+      </div>
+      <div class="setting-row">
+        <label class="checkbox-label"><input type="checkbox" id="frConsent"/> I will use this application only for media I own, am authorized to download, or whose license/platform rules explicitly permit downloading.</label>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-primary" id="frFinish" disabled>Finish</button>
+    </div>
   </div>
 </div>
 
