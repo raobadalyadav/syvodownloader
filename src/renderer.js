@@ -3,6 +3,22 @@ const S = { queue: [], history: [], tab: 'all', search: '', settings: {}, pendin
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
+/* ─── Mode-aware quality/format option sets ─────────── */
+const VIDEO_QUALITIES = [['2160','4K 2160p'],['1440','1440p'],['1080','HD 1080p'],['720','HD 720p'],['480','480p'],['360','360p'],['240','240p']];
+const AUDIO_QUALITIES = [['best','Best'],['320','320 kbps'],['256','256 kbps'],['192','192 kbps'],['128','128 kbps'],['96','96 kbps']];
+const VIDEO_FORMATS = [['mp4','MP4'],['mkv','MKV'],['webm','WebM']];
+const AUDIO_FORMATS = [['mp3','MP3'],['m4a','M4A'],['opus','Opus'],['wav','WAV'],['flac','FLAC']];
+
+function fillSelect(sel, opts, preferred) {
+  sel.innerHTML = opts.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  sel.value = opts.some(([v]) => v === preferred) ? preferred : opts[0][0];
+}
+/** Swap a Quality/Format select pair to match the chosen mode, keeping the format value stable across a mode flip when possible. */
+function syncModeSelects(qualitySel, formatSel, mode, defaults = {}) {
+  fillSelect(qualitySel, mode === 'audio' ? AUDIO_QUALITIES : VIDEO_QUALITIES, mode === 'audio' ? (defaults.audioQuality || 'best') : (defaults.videoQuality || '1080'));
+  fillSelect(formatSel, mode === 'audio' ? AUDIO_FORMATS : VIDEO_FORMATS, mode === 'audio' ? (defaults.audioFormat || 'mp3') : (defaults.videoFormat || 'mp4'));
+}
+
 /* ─── Helpers ───────────────────────────────────────── */
 function fmtDur(sec) {
   if (!sec) return '—';
@@ -139,7 +155,7 @@ $('#importFileBtn').onclick = importUrlsFromFile;
 async function importUrlsFromFile() {
   const urls = await window.api.importUrls();
   if (!urls || !urls.length) { toast('warn', 'No valid URLs found in that file.'); return; }
-  const mode = $('#modeSelect').value, quality = $('#qualitySelect').value, container = $('#formatSelect').value;
+  const mode = $('#modeSelect').value, quality = $('#qualitySelect').value, formatVal = $('#formatSelect').value;
   let added = 0, failed = 0;
   openModal('#analyzingOverlay');
   const items = [];
@@ -149,7 +165,9 @@ async function importUrlsFromFile() {
     try {
       const meta = await window.api.inspect(urls[i], false);
       if (meta.isPlaylist) { failed++; continue; }
-      items.push({ url: urls[i], title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, container, subtitles: false, playlist: false });
+      const item = { url: urls[i], title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, subtitles: false, playlist: false };
+      if (mode === 'audio') item.audioFormat = formatVal; else item.container = formatVal;
+      items.push(item);
       added++;
     } catch { failed++; }
   }
@@ -161,6 +179,23 @@ async function importUrlsFromFile() {
 }
 
 /* ─── Video Info Modal ──────────────────────────────── */
+function applyInfoModeOptions(meta) {
+  const mode = $('#infoMode').value;
+  fillSelect($('#infoFormat'), mode === 'audio' ? AUDIO_FORMATS : VIDEO_FORMATS, mode === 'audio' ? (S.settings.preferredAudioFormat || 'mp3') : (S.settings.preferredContainer || 'mp4'));
+  const qs = $('#infoQuality');
+  if (mode === 'audio') {
+    fillSelect(qs, AUDIO_QUALITIES, 'best');
+    return;
+  }
+  qs.innerHTML = '';
+  const heights = [...new Set((meta.formats || []).filter(f => f.height).map(f => f.height))].sort((a, b) => b - a);
+  if (heights.length) {
+    heights.forEach(h => { const o = document.createElement('option'); o.value = h; o.textContent = `${h}p`; if (h <= 1080) o.selected = true; qs.appendChild(o); });
+  } else {
+    VIDEO_QUALITIES.forEach(([v, l], i) => { const o = document.createElement('option'); o.value = v; o.textContent = l; if (i === 2) o.selected = true; qs.appendChild(o); });
+  }
+}
+
 function showInfoModal(meta, url) {
   S.pendingMeta = { meta, url };
   $('#infoThumb').src = meta.thumbnail || '';
@@ -172,14 +207,8 @@ function showInfoModal(meta, url) {
   if (meta.subtitles?.length) badges.innerHTML += `<span class="badge">Subs: ${meta.subtitles.slice(0,3).join(', ')}</span>`;
   if (meta.chapters?.length) badges.innerHTML += `<span class="badge">${meta.chapters.length} Chapters</span>`;
 
-  const qs = $('#infoQuality');
-  qs.innerHTML = '';
-  const heights = [...new Set((meta.formats || []).filter(f => f.height).map(f => f.height))].sort((a,b) => b-a);
-  if (heights.length) {
-    heights.forEach(h => { const o = document.createElement('option'); o.value = h; o.textContent = `${h}p`; if (h <= 1080) o.selected = true; qs.appendChild(o); });
-  } else {
-    ['2160','1440','1080','720','480','360'].forEach((h,i) => { const o = document.createElement('option'); o.value = h; o.textContent = `${h}p`; if (i===2) o.selected=true; qs.appendChild(o); });
-  }
+  $('#infoMode').value = $('#dlMode').value || 'video';
+  applyInfoModeOptions(meta);
 
   // Format table
   const wrap = $('#formatTableInner');
@@ -190,6 +219,8 @@ function showInfoModal(meta, url) {
   }
   openModal('#infoModalOverlay');
 }
+
+$('#infoMode').onchange = () => { if (S.pendingMeta) applyInfoModeOptions(S.pendingMeta.meta); };
 
 $('#toggleFormats').onclick = () => {
   const inner = $('#formatTableInner');
@@ -228,7 +259,7 @@ async function warnIfLowDisk(meta, mode, quality) {
 }
 
 async function queueSingleItem(base) {
-  const ext = base.mode === 'audio' ? (S.settings.preferredAudioFormat || 'mp3') : (base.container || 'mp4');
+  const ext = base.mode === 'audio' ? (base.audioFormat || 'mp3') : (base.container || 'mp4');
   try {
     const { exists } = await window.api.checkFileExists(base.title, ext);
     if (exists) {
@@ -247,11 +278,13 @@ $('#addToQueueBtn').onclick = async () => {
   const { meta, url } = S.pendingMeta;
   const mode = $('#infoMode').value;
   const quality = $('#infoQuality').value;
-  const container = $('#infoFormat').value;
+  const formatVal = $('#infoFormat').value;
   const subtitles = $('#infoSubs').checked;
   closeModal('#infoModalOverlay');
   warnIfLowDisk(meta, mode, quality);
-  await queueSingleItem({ url, title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, container, subtitles, playlist: false });
+  const item = { url, title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, subtitles, playlist: false };
+  if (mode === 'audio') item.audioFormat = formatVal; else item.container = formatVal;
+  await queueSingleItem(item);
 };
 
 /* ─── Playlist Modal ─────────────────────────────────── */
@@ -268,17 +301,24 @@ function showPlaylistModal(data, url) {
     </div>`).join('');
   S.pendingMeta = { data, url };
   $('#selectAll').onchange = e => { $$('.pl-check').forEach(c => c.checked = e.target.checked); };
+  syncModeSelects($('#plQuality'), $('#plFormat'), $('#plMode').value);
   openModal('#playlistModalOverlay');
 }
+$('#plMode').onchange = e => { syncModeSelects($('#plQuality'), $('#plFormat'), e.target.value); };
 
 $('#downloadPlaylistBtn').onclick = async () => {
   const { data } = S.pendingMeta;
-  const mode = $('#plMode').value, quality = $('#plQuality').value, container = $('#plFormat').value;
+  const mode = $('#plMode').value, quality = $('#plQuality').value, formatVal = $('#plFormat').value;
   const selected = $$('.pl-check').filter(c => c.checked).map(c => data.entries[+c.dataset.idx]);
   if (!selected.length) return;
-  const items = selected.map(e => ({ url: e.url, title: e.title, thumbnail: e.thumbnail, uploader: e.uploader, duration: e.duration, mode, quality, container, subtitles: false, playlist: false }));
+  const items = selected.map(e => {
+    const item = { url: e.url, title: e.title, thumbnail: e.thumbnail, uploader: e.uploader, duration: e.duration, mode, quality, subtitles: false, playlist: false };
+    if (mode === 'audio') item.audioFormat = formatVal; else item.container = formatVal;
+    return item;
+  });
   await window.api.addBatch(items);
   closeModal('#playlistModalOverlay');
+  toast('success', `${items.length} item${items.length === 1 ? '' : 's'} added to queue.`);
 };
 
 /* ─── Settings Modal ────────────────────────────────── */
@@ -420,8 +460,8 @@ function queueItemHTML(item) {
       <div class="item-meta">
         ${item.uploader ? `<span>${esc(item.uploader)}</span>` : ''}
         ${item.duration ? `<span>${fmtDur(item.duration)}</span>` : ''}
-        ${item.mode === 'audio' ? `<span class="meta-badge">🎵 Audio</span>` : `<span class="meta-badge">🎬 ${item.quality || 'Best'}p</span>`}
-        <span class="meta-badge">${(item.container || item.audioFormat || 'mp4').toUpperCase()}</span>
+        ${item.mode === 'audio' ? `<span class="meta-badge">🎵 ${item.quality && item.quality !== 'best' ? item.quality + ' kbps' : 'Best'}</span>` : `<span class="meta-badge">🎬 ${item.quality || 'Best'}p</span>`}
+        <span class="meta-badge">${((item.mode === 'audio' ? item.audioFormat : item.container) || (item.mode === 'audio' ? 'mp3' : 'mp4')).toUpperCase()}</span>
       </div>
       <div class="item-progress-wrap">
         <div class="progress-bar"><div class="progress-fill ${fillClass}" style="width:${pct}%"></div></div>
@@ -537,9 +577,14 @@ window.api.on('queue:restored', queue => {
 window.api.on('open-settings', () => openSettings());
 
 /* ─── Toolbar selects sync ──────────────────────────── */
-$('#modeSelect').onchange = e => { $('#dlMode').value = e.target.value; };
+$('#modeSelect').onchange = e => {
+  syncModeSelects($('#qualitySelect'), $('#formatSelect'), e.target.value);
+  $('#dlMode').value = e.target.value;
+  syncModeSelects($('#dlQuality'), $('#dlFormat'), e.target.value);
+};
 $('#qualitySelect').onchange = e => { $('#dlQuality').value = e.target.value; };
 $('#formatSelect').onchange = e => { $('#dlFormat').value = e.target.value; };
+$('#dlMode').onchange = e => { syncModeSelects($('#dlQuality'), $('#dlFormat'), e.target.value); };
 
 /* ─── Drag & drop URL ────────────────────────────────── */
 let dragDepth = 0;

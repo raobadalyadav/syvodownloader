@@ -321,7 +321,8 @@ function buildArgs(item) {
   if (item.mode === 'audio') {
     args.push('-f', 'bestaudio/best');
     if (hasFfmpeg) {
-      args.push('-x', '--audio-format', item.audioFormat || settings.preferredAudioFormat || 'mp3', '--audio-quality', '0');
+      const q = item.quality && item.quality !== 'best' ? `${item.quality}K` : '0';
+      args.push('-x', '--audio-format', item.audioFormat || settings.preferredAudioFormat || 'mp3', '--audio-quality', q);
       if (settings.embedMetadata) args.push('--add-metadata');
       if (settings.embedThumbnail) args.push('--embed-thumbnail');
     }
