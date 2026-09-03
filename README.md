@@ -24,7 +24,11 @@ Use this app only for media you own, have permission to download, or where the p
 | Network | Broadband internet connection (required — the app cannot analyze or download offline) | — |
 | Permissions | Write access to the selected download folder | — |
 
-> The Windows installer bundles `yt-dlp` and `FFmpeg` automatically (see [Building](#building-a-windows-installer) below), so a typical end user does not need to install anything else separately. macOS/Linux are not officially targeted but the app runs on them via Electron since there is nothing Windows-specific in the code.
+> Every packaged build (Windows, Linux, macOS) bundles its own `yt-dlp` and `FFmpeg` automatically (see [Building](#building-installers) below), so a typical end user does not need to install anything else separately.
+
+### Linux / macOS
+
+Same requirements as above, adjusted for platform: Linux needs a 64-bit distro with FUSE available for AppImage (or install the `.deb` instead); macOS needs 11 (Big Sur) or later. The macOS build is unsigned — Gatekeeper will warn on first launch, so open it via right-click → Open the first time (or `xattr -cr` on the `.app`).
 
 ### To run or build from source (developers)
 
@@ -46,14 +50,16 @@ npm start
 
 On first launch you'll see a short welcome screen to pick your download folder, confirm dependency status, choose a theme, and accept the responsible-use terms.
 
-## Building a Windows installer
+## Building installers
 
 ```bash
-npm run build:win        # NSIS installer
-npm run build:portable   # portable .exe
+npm run build:win        # Windows: NSIS installer
+npm run build:portable   # Windows: portable .exe
+npm run build:linux      # Linux: AppImage + .deb
+npm run build:mac        # macOS: .zip (unsigned — see note above)
 ```
 
-Place `yt-dlp.exe` and `ffmpeg.exe` in `bin/` before building — `electron-builder` copies that folder into the packaged app's `resources/bin/`, so the installer works out of the box without asking users to install dependencies themselves.
+`bin/` holds each platform's `yt-dlp`/`ffmpeg` binaries in its own subfolder — `bin/win/`, `bin/linux/`, `bin/mac/` — and `electron-builder` copies only the matching one into each build's `resources/bin/`, so every installer works out of the box without asking users to install dependencies themselves. Linux/macOS cross-builds from a Linux machine work for AppImage/deb/zip, but macOS code signing and notarization require an actual Mac.
 
 ---
 

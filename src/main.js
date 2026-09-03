@@ -79,9 +79,11 @@ let history = loadHistory();
 function locateBinary(name) {
   const exe = process.platform === 'win32' ? `${name}.exe` : name;
   const home = process.env.HOME || process.env.USERPROFILE || '';
+  const platformDir = process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux';
   const candidates = [
     path.join(process.resourcesPath || '', 'bin', exe),
-    path.join(__dirname, '..', 'bin', exe),
+    // Running unpackaged (npm start): bin/ is split per-platform since win/linux/mac binaries aren't interchangeable.
+    path.join(__dirname, '..', 'bin', platformDir, exe),
     path.join(home, '.local', 'bin', exe),
     path.join('/usr', 'local', 'bin', exe),
     path.join('/usr', 'bin', exe),

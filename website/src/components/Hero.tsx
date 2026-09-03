@@ -1,6 +1,25 @@
-import { DOWNLOAD_INSTALLER, DOWNLOAD_PORTABLE, REPO } from '../constants'
+import { useMemo } from 'react'
+import { DOWNLOAD_LINUX_APPIMAGE, DOWNLOAD_LINUX_DEB, DOWNLOAD_MAC_ZIP, DOWNLOAD_WIN_INSTALLER, DOWNLOAD_WIN_PORTABLE, REPO } from '../constants'
+
+type Platform = 'win' | 'mac' | 'linux'
+
+function detectPlatform(): Platform {
+  const ua = navigator.userAgent
+  if (/Mac/i.test(ua)) return 'mac'
+  if (/Linux/i.test(ua) && !/Android/i.test(ua)) return 'linux'
+  return 'win'
+}
+
+const PRIMARY_CTA: Record<Platform, { label: string; href: string; note: string }> = {
+  win: { label: '↓ Download for Windows', href: DOWNLOAD_WIN_INSTALLER, note: 'Installer · .exe' },
+  mac: { label: '↓ Download for macOS', href: DOWNLOAD_MAC_ZIP, note: 'Apple Silicon & Intel · .zip' },
+  linux: { label: '↓ Download for Linux', href: DOWNLOAD_LINUX_APPIMAGE, note: 'AppImage · no install needed' },
+}
 
 export function Hero() {
+  const platform = useMemo(() => detectPlatform(), [])
+  const primary = PRIMARY_CTA[platform]
+
   return (
     <section className="hero">
       <div className="wrap hero-grid">
@@ -12,12 +31,20 @@ export function Hero() {
             no account, no server, no cloud copy of your media.
           </p>
           <div className="cta-row">
-            <a className="btn btn-primary" href={DOWNLOAD_INSTALLER}>↓ Download for Windows</a>
-            <a className="btn btn-ghost" href={DOWNLOAD_PORTABLE}>Portable .exe</a>
+            <a className="btn btn-primary" href={primary.href}>{primary.label}</a>
           </div>
-          <div className="cta-note">
-            v1.0.0 · 132 MB installer · yt-dlp &amp; ffmpeg bundled ·{' '}
-            <a href={REPO} target="_blank" rel="noopener noreferrer">source</a>
+          <div className="cta-note">v1.1.0 · {primary.note} · yt-dlp &amp; ffmpeg bundled</div>
+
+          <div className="platform-row">
+            <a href={DOWNLOAD_WIN_PORTABLE} className={platform === 'win' ? 'plink current' : 'plink'}>Windows (portable)</a>
+            <span className="plink-sep">·</span>
+            <a href={DOWNLOAD_MAC_ZIP} className={platform === 'mac' ? 'plink current' : 'plink'}>macOS</a>
+            <span className="plink-sep">·</span>
+            <a href={DOWNLOAD_LINUX_APPIMAGE} className={platform === 'linux' ? 'plink current' : 'plink'}>Linux (AppImage)</a>
+            <span className="plink-sep">·</span>
+            <a href={DOWNLOAD_LINUX_DEB} className="plink">.deb</a>
+            <span className="plink-sep">·</span>
+            <a href={REPO} target="_blank" rel="noopener noreferrer" className="plink">source</a>
           </div>
         </div>
 

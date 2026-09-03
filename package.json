@@ -2,12 +2,18 @@
   "name": "syvo-downloader",
   "version": "1.1.0",
   "description": "Syvo Downloader — a local-first Windows desktop app for downloading video/audio from YouTube, Instagram, Facebook, and 1,800+ other sites via yt-dlp, for content you own or are authorized to download.",
+  "author": {
+    "name": "Badal Yadav",
+    "email": "raobadalyadav11@gmail.com"
+  },
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
     "build:win": "electron-builder --win nsis",
-    "build:portable": "electron-builder --win portable"
+    "build:portable": "electron-builder --win portable",
+    "build:linux": "electron-builder --linux AppImage deb",
+    "build:mac": "electron-builder --mac zip"
   },
   "devDependencies": {
     "electron": "^38.0.0",
@@ -17,10 +23,19 @@
     "appId": "com.syvodownloader.app",
     "productName": "Syvo Downloader",
     "files": ["src/**/*", "package.json"],
-    "extraResources": [
-      { "from": "bin", "to": "bin", "filter": ["**/*"] }
-    ],
     "directories": { "output": "dist" },
-    "win": { "target": ["nsis", "portable"] }
+    "win": {
+      "target": ["nsis", "portable"],
+      "extraResources": [{ "from": "bin/win", "to": "bin", "filter": ["**/*"] }]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "AudioVideo",
+      "extraResources": [{ "from": "bin/linux", "to": "bin", "filter": ["**/*"] }]
+    },
+    "mac": {
+      "target": ["zip"],
+      "extraResources": [{ "from": "bin/mac", "to": "bin", "filter": ["**/*"] }]
+    }
   }
 }
