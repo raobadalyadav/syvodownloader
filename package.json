@@ -1,7 +1,7 @@
 {
-  "name": "desktop-video-downloader",
-  "version": "1.0.0",
-  "description": "Windows-style desktop media downloader UI using yt-dlp for content you are authorized to download.",
+  "name": "syvo-downloader",
+  "version": "1.1.0",
+  "description": "Syvo Downloader — a local-first Windows desktop app for downloading video/audio from YouTube, Instagram, Facebook, and 1,800+ other sites via yt-dlp, for content you own or are authorized to download.",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
@@ -14,8 +14,8 @@
     "electron-builder": "^26.0.0"
   },
   "build": {
-    "appId": "com.svotech.desktopdownloader",
-    "productName": "Desktop Video Downloader",
+    "appId": "com.syvodownloader.app",
+    "productName": "Syvo Downloader",
     "files": ["src/**/*", "package.json"],
     "extraResources": [
       { "from": "bin", "to": "bin", "filter": ["**/*"] }

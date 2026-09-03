@@ -297,10 +297,18 @@ function parseHumanSize(str) {
 }
 
 // ─── Download Engine ──────────────────────────────────────────────────────────
-function buildFormatStr(mode, quality, hasFfmpeg) {
+function buildFormatStr(mode, quality, hasFfmpeg, container) {
   if (mode === 'audio') return 'bestaudio/best';
   const h = parseInt(quality) || 1080;
   if (hasFfmpeg) {
+    if (container === 'mov') {
+      // MOV's muxer only reliably stream-copies H.264 video + AAC audio. Filtering by container
+      // extension (ext=mp4) isn't enough — some "mp4" formats are actually AV1 or VP9 (yt-dlp's
+      // default codec-preference sort can pick those over H.264 even within mp4-labeled options),
+      // and remuxing those into MOV fails with "Error opening output files: Invalid argument".
+      // Filter on the real codec instead, and never fall back to an incompatible one.
+      return `bestvideo[height<=${h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc1]+bestaudio[acodec^=mp4a]/best[vcodec^=avc1][acodec^=mp4a]`;
+    }
     return `bestvideo[height<=${h}][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=${h}]+bestaudio/best[height<=${h}]/best`;
   }
   // No ffmpeg — download best pre-merged mp4 only
@@ -352,26 +360,32 @@ function buildArgs(item) {
   if (item.forceOverwrite) args.push('--force-overwrites');
   if (hasFfmpeg) args.splice(3, 0, '--ffmpeg-location', ffmpegPath);
 
+  // A per-download choice (from the Info dialog) wins when present; otherwise fall back to the
+  // matching global Setting, so a toggle in Settings actually takes effect rather than being ignored.
+  const wantEmbedMeta = item.embedMetadata !== undefined ? item.embedMetadata : settings.embedMetadata;
+  const wantEmbedSubs = item.embedSubs !== undefined ? item.embedSubs : settings.embedSubs;
+
   if (item.mode === 'audio') {
     args.push('-f', 'bestaudio/best');
     if (hasFfmpeg) {
       const q = item.quality && item.quality !== 'best' ? `${item.quality}K` : '0';
       args.push('-x', '--audio-format', item.audioFormat || settings.preferredAudioFormat || 'mp3', '--audio-quality', q);
-      if (settings.embedMetadata) args.push('--add-metadata');
+      if (wantEmbedMeta) args.push('--add-metadata');
       if (settings.embedThumbnail) args.push('--embed-thumbnail');
     }
   } else {
-    args.push('-f', buildFormatStr(item.mode, item.quality, hasFfmpeg));
+    const targetContainer = item.container || settings.preferredContainer || 'mp4';
+    args.push('-f', buildFormatStr(item.mode, item.quality, hasFfmpeg, targetContainer));
     if (hasFfmpeg) {
-      args.push('--merge-output-format', item.container || settings.preferredContainer || 'mp4');
-      if (settings.embedMetadata) args.push('--add-metadata');
+      args.push('--merge-output-format', targetContainer);
+      if (wantEmbedMeta) args.push('--add-metadata');
     }
   }
   if (item.subtitles) {
     args.push('--write-subs');
     if (item.autoSubtitles) args.push('--write-auto-subs');
     args.push('--sub-langs', item.subLangs || settings.subtitleLangs || 'en', '--convert-subs', 'srt');
-    if (item.embedSubs && hasFfmpeg) args.push('--embed-subs');
+    if (wantEmbedSubs && hasFfmpeg) args.push('--embed-subs');
   }
   if (item.playlist) args.push('--yes-playlist'); else args.push('--no-playlist');
   if (settings.rateLimitMbps > 0) args.push('-r', `${settings.rateLimitMbps}M`);

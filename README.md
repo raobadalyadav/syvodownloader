@@ -1,4 +1,4 @@
-# Syvo Downloader (Desktop Video Downloader)
+# Syvo Downloader
 
 A Windows-style desktop application for downloading permitted online video/audio content. It provides a download queue, video/audio modes, quality selection, real-time progress, history, search, settings, playlist support, subtitles, duplicate-file detection, and a first-run responsible-use confirmation — built with Electron, [yt-dlp](https://github.com/yt-dlp/yt-dlp), and [FFmpeg](https://ffmpeg.org/).
 
@@ -82,6 +82,14 @@ Place `yt-dlp.exe` and `ffmpeg.exe` in `bin/` before building — `electron-buil
 | Ctrl+Shift+R | Resume all |
 
 ---
+
+## Website
+
+A static React landing/marketing site lives in [`website/`](website/) — see [`website/README.md`](website/README.md) for running, building, and deploying it. It only links to the GitHub Release assets; it never hosts or processes any media itself.
+
+## Web UI (local, browser-based)
+
+Prefer a browser tab over the Electron window? [`webapp/`](webapp/) is a React + Express app with the full download engine — same features as the desktop app — running as a small server on your own machine (`127.0.0.1` only, never a public/hosted service). See [`webapp/README.md`](webapp/README.md).
 
 ## Product direction
 

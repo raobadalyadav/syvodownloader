@@ -6,7 +6,7 @@ const $$ = s => [...document.querySelectorAll(s)];
 /* ─── Mode-aware quality/format option sets ─────────── */
 const VIDEO_QUALITIES = [['2160','4K 2160p'],['1440','1440p'],['1080','HD 1080p'],['720','HD 720p'],['480','480p'],['360','360p'],['240','240p']];
 const AUDIO_QUALITIES = [['best','Best'],['320','320 kbps'],['256','256 kbps'],['192','192 kbps'],['128','128 kbps'],['96','96 kbps']];
-const VIDEO_FORMATS = [['mp4','MP4'],['mkv','MKV'],['webm','WebM']];
+const VIDEO_FORMATS = [['mp4','MP4'],['mkv','MKV'],['webm','WebM'],['mov','MOV']];
 const AUDIO_FORMATS = [['mp3','MP3'],['m4a','M4A'],['opus','Opus'],['wav','WAV'],['flac','FLAC']];
 
 function fillSelect(sel, opts, preferred) {
@@ -60,7 +60,16 @@ document.addEventListener('click', e => {
 /* ─── Menubar dropdowns ─────────────────────────────── */
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') $$('.modal-overlay').forEach(m => { if (!m.classList.contains('hidden') && !UNDISMISSABLE.includes(m.id)) closeModal('#' + m.id); });
-  if ((e.ctrlKey || e.metaKey) && e.key === 'v') { e.preventDefault(); showUrlModal(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+    const tag = document.activeElement?.tagName;
+    const isEditable = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable;
+    if (!isEditable) {
+      // No field is focused — treat Ctrl+V as "quick add from clipboard" instead of eating a normal paste.
+      e.preventDefault();
+      showUrlModal();
+      window.api.readClipboard().then(text => { if (text) $('#urlInput').value = text.trim(); });
+    }
+  }
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); showUrlModal(); }
   if ((e.ctrlKey || e.metaKey) && e.key === ',') openSettings();
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') $('#searchInput').focus();
@@ -222,18 +231,22 @@ function applyInfoModeOptions(meta) {
     return;
   }
   qs.innerHTML = '';
+  const preferredH = parseInt(S.settings.preferredQuality) || 1080;
   const heights = [...new Set(formats.filter(f => f.height).map(f => f.height))].sort((a, b) => b - a);
   if (heights.length) {
+    // Prefer exactly the user's saved default quality; if this source doesn't offer that height,
+    // fall back to the closest one at or below it (never silently jump to something higher).
+    const target = heights.includes(preferredH) ? preferredH : (heights.find(h => h <= preferredH) || heights[heights.length - 1]);
     heights.forEach(h => {
       const o = document.createElement('option');
       o.value = h;
       const size = estimateVideoSize(formats, h);
       o.textContent = `${h}p${size ? ' — ~' + fmtSize(size) : ''}`;
-      if (h <= 1080) o.selected = true;
+      if (h === target) o.selected = true;
       qs.appendChild(o);
     });
   } else {
-    VIDEO_QUALITIES.forEach(([v, l], i) => { const o = document.createElement('option'); o.value = v; o.textContent = l; if (i === 2) o.selected = true; qs.appendChild(o); });
+    VIDEO_QUALITIES.forEach(([v, l]) => { const o = document.createElement('option'); o.value = v; o.textContent = l; if (v === String(preferredH)) o.selected = true; qs.appendChild(o); });
   }
 }
 
@@ -250,9 +263,10 @@ function showInfoModal(meta, url) {
 
   $('#infoMode').value = $('#dlMode').value || 'video';
   applyInfoModeOptions(meta);
-  $('#infoSubs').checked = false;
+  $('#infoEmbed').checked = !!S.settings.embedMetadata;
+  $('#infoSubs').checked = !!S.settings.downloadSubtitles;
   buildLangGrid($('#infoLangGrid'), S.settings.subtitleLangs);
-  $('#infoLangGrid').classList.add('hidden');
+  $('#infoLangGrid').classList.toggle('hidden', !S.settings.downloadSubtitles);
   openModal('#infoModalOverlay');
 }
 
@@ -311,9 +325,10 @@ $('#addToQueueBtn').onclick = async () => {
   const quality = $('#infoQuality').value;
   const formatVal = $('#infoFormat').value;
   const subtitles = $('#infoSubs').checked;
+  const embedMetadata = $('#infoEmbed').checked;
   closeModal('#infoModalOverlay');
   warnIfLowDisk(meta, mode, quality);
-  const item = { url, title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, subtitles, playlist: false };
+  const item = { url, title: meta.title, thumbnail: meta.thumbnail, uploader: meta.uploader, duration: meta.duration, mode, quality, subtitles, embedMetadata, playlist: false };
   if (mode === 'audio') item.audioFormat = formatVal; else item.container = formatVal;
   if (subtitles) item.subLangs = readLangGrid($('#infoLangGrid'));
   await queueSingleItem(item);
@@ -398,7 +413,7 @@ async function loadDeps() {
 }
 
 $('#sBrowse').onclick = async () => { const p = await window.api.pickFolder(); if (p) $('#sFolder').value = p; };
-$('#sReset').onclick = async () => { const s = await window.api.resetSettings(); S.settings = s; openSettings(); };
+$('#sReset').onclick = async () => { const s = await window.api.resetSettings(); S.settings = s; syncQuickPickersToSettings(); openSettings(); };
 
 /** Insert `text` at the current cursor position of an <input>, replacing any selection. */
 function insertAtCursor(input, text) {
@@ -454,11 +469,25 @@ $('#saveSettingsBtn').onclick = async () => {
   S.settings = await window.api.setSettings(s);
   applyTheme(s.theme);
   updatePathLabel();
+  syncQuickPickersToSettings();
   closeModal('#settingsModalOverlay');
 };
 
 function applyTheme(theme) {
   document.body.classList.toggle('light', theme === 'light');
+}
+
+/** Make the toolbar's quick Quality/Format pickers (and the Add Download dialog they seed) reflect
+ * the user's saved Settings defaults, instead of silently staying on the hardcoded HTML values. */
+function syncQuickPickersToSettings() {
+  if (S.settings.preferredQuality) {
+    $('#qualitySelect').value = S.settings.preferredQuality;
+    $('#dlQuality').value = S.settings.preferredQuality;
+  }
+  if (S.settings.preferredContainer) {
+    $('#formatSelect').value = S.settings.preferredContainer;
+    $('#dlFormat').value = S.settings.preferredContainer;
+  }
 }
 function updatePathLabel() {
   const p = S.settings.outputDir || '';
@@ -702,6 +731,7 @@ async function showFirstRun() {
   S.history = await window.api.getHistory();
   applyTheme(S.settings.theme);
   updatePathLabel();
+  syncQuickPickersToSettings();
   renderQueue();
   if (!S.settings.firstRunComplete) showFirstRun();
 })();

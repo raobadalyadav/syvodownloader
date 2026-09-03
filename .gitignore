@@ -1,3 +1,38 @@
-/node_modules
-/dist
+# Dependencies (any workspace: root, website/, webapp/client/, webapp/server/)
+node_modules/
+
+# Build output
+/dist/
+website/dist/
+webapp/client/dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Downloaded runtime binaries — large, re-fetched via README instructions, not source
+bin/
+
+# Env files
 .env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.local
